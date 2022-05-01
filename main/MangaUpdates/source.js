@@ -15291,7 +15291,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getSourceMenu = void 0;
 const session = __importStar(require("../utils/mu-session"));
-function getLoggedInSourceMenu(stateManger, username) {
+function getLoggedInSourceMenu(stateManager, username) {
     return [
         createLabel({
             id: 'userInfo',
@@ -15302,7 +15302,7 @@ function getLoggedInSourceMenu(stateManger, username) {
             id: 'logout',
             label: 'Logout',
             value: undefined,
-            onTap: () => session.logout(this.stateManager)
+            onTap: () => session.logout(stateManager)
         })
     ];
 }
