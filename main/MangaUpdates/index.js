@@ -15210,7 +15210,7 @@ exports.MangaUpdatesInfo = {
     icon: 'icon.png',
     version: '0.1.0',
     description: 'MangaUpdates Tracker',
-    websiteBaseURL: 'https://www.mangaupdates.com/',
+    websiteBaseURL: 'https://www.mangaupdates.com',
 };
 class MangaUpdates extends paperback_extensions_common_1.Tracker {
     constructor() {
@@ -15294,13 +15294,19 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                                     ]),
                                     onSubmit: (values) => __awaiter(this, void 0, void 0, function* () {
                                         console.log(`[loginform.onSubmit] got values ${JSON.stringify(values)}`);
-                                        if (!values.username) {
-                                            throw new Error('Username must not be empty');
+                                        try {
+                                            if (!values.username) {
+                                                throw new Error('Username must not be empty');
+                                            }
+                                            if (!values.password) {
+                                                throw new Error('Password must not be empty');
+                                            }
+                                            yield session.login(this.stateManager, this.requestManager, values);
+                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                         }
-                                        if (!values.password) {
-                                            throw new Error('Password must not be empty');
+                                        catch (e) {
+                                            console.error(`[loginform.onSubmit] failed: ${(e === null || e === void 0 ? void 0 : e.stack) || e}`);
                                         }
-                                        yield session.login(this.stateManager, this.requestManager, values);
                                     }),
                                     validate: () => Promise.resolve(true)
                                 })
