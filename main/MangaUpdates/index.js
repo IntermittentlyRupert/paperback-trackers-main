@@ -15166,29 +15166,6 @@ module.exports = function whichTypedArray(value) {
 }).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"available-typed-arrays":1,"call-bind/callBound":2,"es-abstract/helpers/getOwnPropertyDescriptor":4,"foreach":5,"has-tostringtag/shams":11,"is-typed-array":16}],85:[function(require,module,exports){
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -15202,7 +15179,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MangaUpdates = exports.MangaUpdatesInfo = void 0;
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 const paperback_extensions_common_1 = require("paperback-extensions-common");
-const session = __importStar(require("./utils/mu-session"));
 const mu_source_menu_1 = require("./ui-makers/mu-source-menu");
 exports.MangaUpdatesInfo = {
     name: 'MangaUpdates',
@@ -15220,10 +15196,10 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
         this.requestManager = createRequestManager({
             requestsPerSecond: 2.5,
             requestTimeout: 20000,
-            interceptor: {
-                interceptRequest: (request) => session.setCookiesOnRequest(this.stateManager, request),
-                interceptResponse: (response) => session.readCookiesFromResponse(this.stateManager, response),
-            },
+            // interceptor: {
+            //     interceptRequest: (request) => session.setCookiesOnRequest(this.stateManager, request),
+            //     interceptResponse: (response) => session.readCookiesFromResponse(this.stateManager, response),
+            // },
         });
     }
     /** TODO */
@@ -15254,7 +15230,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
 }
 exports.MangaUpdates = MangaUpdates;
 
-},{"./ui-makers/mu-source-menu":86,"./utils/mu-session":87,"paperback-extensions-common":20}],86:[function(require,module,exports){
+},{"./ui-makers/mu-source-menu":86,"paperback-extensions-common":20}],86:[function(require,module,exports){
 "use strict";
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
