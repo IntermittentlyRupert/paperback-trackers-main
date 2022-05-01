@@ -15203,6 +15203,7 @@ exports.MangaUpdates = exports.MangaUpdatesInfo = void 0;
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 const paperback_extensions_common_1 = require("paperback-extensions-common");
 const session = __importStar(require("./utils/mu-session"));
+const mu_source_menu_1 = require("./ui-makers/mu-source-menu");
 exports.MangaUpdatesInfo = {
     name: 'MangaUpdates',
     author: 'IntermittentlyRupert',
@@ -15236,86 +15237,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
         throw new Error('unimplemented');
     }
     getSourceMenu() {
-        return __awaiter(this, void 0, void 0, function* () {
-            return createSection({
-                id: 'sourceMenu',
-                header: 'Source Menu',
-                rows: () => __awaiter(this, void 0, void 0, function* () {
-                    const username = yield session.getLoggedInUser(this.stateManager);
-                    if (username) {
-                        return [
-                            createLabel({
-                                id: 'userInfo',
-                                label: 'Logged-in as',
-                                value: username
-                            }),
-                            createButton({
-                                id: 'logout',
-                                label: 'Logout',
-                                value: undefined,
-                                onTap: () => session.logout(this.stateManager)
-                            })
-                        ];
-                    }
-                    else {
-                        return [
-                            createNavigationButton({
-                                id: 'loginButton',
-                                label: 'Login',
-                                value: undefined,
-                                form: createForm({
-                                    sections: () => Promise.resolve([
-                                        createSection({
-                                            id: 'username_section',
-                                            header: 'Username',
-                                            footer: 'Enter your MangaUpdates account username',
-                                            rows: () => Promise.resolve([
-                                                createInputField({
-                                                    id: 'username',
-                                                    placeholder: 'Username',
-                                                    value: '',
-                                                    maskInput: false
-                                                })
-                                            ])
-                                        }),
-                                        createSection({
-                                            id: 'password_section',
-                                            header: 'Password',
-                                            footer: 'Enter the password associated with your MangaUpdates account Username',
-                                            rows: () => Promise.resolve([
-                                                createInputField({
-                                                    id: 'password',
-                                                    placeholder: 'Password',
-                                                    value: '',
-                                                    maskInput: true
-                                                })
-                                            ])
-                                        })
-                                    ]),
-                                    onSubmit: (values) => __awaiter(this, void 0, void 0, function* () {
-                                        console.log(`[loginform.onSubmit] got values ${JSON.stringify(values)}`);
-                                        try {
-                                            if (!values.username) {
-                                                throw new Error('Username must not be empty');
-                                            }
-                                            if (!values.password) {
-                                                throw new Error('Password must not be empty');
-                                            }
-                                            yield session.login(this.stateManager, this.requestManager, values);
-                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                        }
-                                        catch (e) {
-                                            console.error(`[loginform.onSubmit] failed: ${(e === null || e === void 0 ? void 0 : e.stack) || e}`);
-                                        }
-                                    }),
-                                    validate: () => Promise.resolve(true)
-                                })
-                            })
-                        ];
-                    }
-                })
-            });
-        });
+        return (0, mu_source_menu_1.getSourceMenu)(this.stateManager, this.requestManager);
     }
     /** TODO */
     getSearchResults(query, metadata) {
@@ -15332,7 +15254,130 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
 }
 exports.MangaUpdates = MangaUpdates;
 
-},{"./utils/mu-session":86,"paperback-extensions-common":20}],86:[function(require,module,exports){
+},{"./ui-makers/mu-source-menu":86,"./utils/mu-session":87,"paperback-extensions-common":20}],86:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getSourceMenu = void 0;
+const session = __importStar(require("../utils/mu-session"));
+function getLoggedInSourceMenu(stateManger, username) {
+    return [
+        createLabel({
+            id: 'userInfo',
+            label: 'Logged-in as',
+            value: username
+        }),
+        createButton({
+            id: 'logout',
+            label: 'Logout',
+            value: undefined,
+            onTap: () => session.logout(this.stateManager)
+        })
+    ];
+}
+function getLoggedOutSourceMenu(stateManager, requestManager) {
+    return [
+        createNavigationButton({
+            id: 'loginButton',
+            label: 'Login',
+            value: undefined,
+            form: createForm({
+                sections: () => Promise.resolve([
+                    createSection({
+                        id: 'username_section',
+                        header: 'Username',
+                        footer: 'Enter your MangaUpdates account username',
+                        rows: () => Promise.resolve([
+                            createInputField({
+                                id: 'username',
+                                placeholder: 'Username',
+                                value: '',
+                                maskInput: false
+                            })
+                        ])
+                    }),
+                    createSection({
+                        id: 'password_section',
+                        header: 'Password',
+                        footer: 'Enter the password associated with your MangaUpdates account Username',
+                        rows: () => Promise.resolve([
+                            createInputField({
+                                id: 'password',
+                                placeholder: 'Password',
+                                value: '',
+                                maskInput: true
+                            })
+                        ])
+                    })
+                ]),
+                onSubmit: (values) => __awaiter(this, void 0, void 0, function* () {
+                    try {
+                        if (!values.username) {
+                            throw new Error('Username must not be empty');
+                        }
+                        if (!values.password) {
+                            throw new Error('Password must not be empty');
+                        }
+                        yield session.login(stateManager, requestManager, values);
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    }
+                    catch (e) {
+                        console.error(`[source-menu] onSubmit] failed: ${(e === null || e === void 0 ? void 0 : e.stack) || e}`);
+                    }
+                }),
+                validate: () => Promise.resolve(true)
+            })
+        })
+    ];
+}
+function getSourceMenu(stateManager, requestManager) {
+    return __awaiter(this, void 0, void 0, function* () {
+        return createSection({
+            id: 'sourceMenu',
+            header: 'Source Menu',
+            rows: () => __awaiter(this, void 0, void 0, function* () {
+                const username = yield session.getLoggedInUser(stateManager);
+                return (username
+                    ? getLoggedInSourceMenu(stateManager, username)
+                    : getLoggedOutSourceMenu(stateManager, requestManager));
+            })
+        });
+    });
+}
+exports.getSourceMenu = getSourceMenu;
+
+},{"../utils/mu-session":87}],87:[function(require,module,exports){
 "use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -15364,18 +15409,14 @@ function getCookieJar(stateManager) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const store = yield stateManager.keychain.retrieve(STATE_MU_COOKIES);
-            console.log(`${logPrefix} retrieved store value: ${store}`);
             if (typeof store === 'string' && store.length > 0) {
-                const jar = new tough_cookie_1.CookieJar(JSON.parse(store));
-                console.log(`${logPrefix} successfully hydrated store value`);
-                return jar;
+                return new tough_cookie_1.CookieJar(JSON.parse(store));
             }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
         }
         catch (e) {
             console.error(`${logPrefix} failed to initialize from store: ${(e === null || e === void 0 ? void 0 : e.stack) || e}`);
         }
-        console.log(`${logPrefix} initializing a new cookie jar`);
         return new tough_cookie_1.CookieJar();
     });
 }
@@ -15384,9 +15425,7 @@ function updateCookieJar(stateManager, url, setCookies) {
         try {
             const jar = yield getCookieJar(stateManager);
             // TODO: read cookie header into the jar
-            const store = JSON.stringify(jar.toJSON());
-            console.log(`${logPrefix} setting store value: ${store}`);
-            yield stateManager.keychain.store(STATE_MU_COOKIES, store);
+            yield stateManager.keychain.store(STATE_MU_COOKIES, JSON.stringify(jar.toJSON()));
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
         }
         catch (e) {
@@ -15408,14 +15447,13 @@ function getUserCredentials(stateManager) {
         return credentials;
     });
 }
-/** Returns the logged in user's username or undefined */
 function getLoggedInUser(stateManager) {
     return __awaiter(this, void 0, void 0, function* () {
-        console.log(`${logPrefix} getLoggedInUser starts`);
-        const [credentials, jar] = yield Promise.all([getUserCredentials(stateManager), getCookieJar(stateManager)]);
-        const result = credentials && hasActiveSession(jar);
-        console.log(`${logPrefix} getLoggedInUser complete (result=${result}, username=${credentials === null || credentials === void 0 ? void 0 : credentials.username})`);
-        return result ? credentials.username : undefined;
+        const [credentials, jar] = yield Promise.all([
+            getUserCredentials(stateManager),
+            getCookieJar(stateManager)
+        ]);
+        return credentials && hasActiveSession(jar) ? credentials.username : undefined;
     });
 }
 exports.getLoggedInUser = getLoggedInUser;
@@ -15423,15 +15461,18 @@ function login(stateManager, requestManager, credentials) {
     return __awaiter(this, void 0, void 0, function* () {
         console.log(`${logPrefix} login starts`);
         if (!validateCredentials(credentials)) {
+            console.error(`${logPrefix} tried to store invalid mu_credentials: ${JSON.stringify(credentials)}`);
             throw new Error('tried to store invalid mu_credentials');
         }
         try {
+            console.log('HERE 0');
             const response = yield requestManager.schedule(createRequestObject({
                 url: 'https://www.mangaupdates.com/login.html',
                 method: 'POST',
                 headers: { 'content-type': 'application/x-www-form-urlencoded' },
                 data: new URLSearchParams(Object.assign({ act: 'login' }, credentials)).toString(),
             }), 0);
+            console.log('HERE 1');
             if (response.status > 399 || !response.data.includes(`Welcome back, ${credentials.username}`)) {
                 console.error(`${logPrefix} login error (${response.status}): ${response.data}`);
                 throw new Error('invalid credentials');
@@ -15446,6 +15487,7 @@ function login(stateManager, requestManager, credentials) {
             console.error(`${logPrefix} failed to log in: ${(e === null || e === void 0 ? void 0 : e.stack) || e}`);
             throw new Error('login failed');
         }
+        console.log('HERE 2');
         yield stateManager.keychain.store(STATE_MU_CREDENTIALS, JSON.stringify(credentials));
         console.log(`${logPrefix} login complete`);
     });
@@ -15459,7 +15501,6 @@ function logout(stateManager) {
     });
 }
 exports.logout = logout;
-/** Returns whether an active session exists after the refresh attempt. */
 function refreshSession(stateManager, requestManager, forceRefresh = false) {
     return __awaiter(this, void 0, void 0, function* () {
         console.log(`${logPrefix} refreshSession starts (forceRefresh=${forceRefresh})`);
@@ -15469,7 +15510,7 @@ function refreshSession(stateManager, requestManager, forceRefresh = false) {
         }
         const credentials = yield getUserCredentials(stateManager);
         if (!credentials) {
-            console.log(`${logPrefix} no credentials available, unable to refresh`);
+            console.warn(`${logPrefix} no credentials available, unable to refresh`);
             return;
         }
         yield login(stateManager, requestManager, credentials);
@@ -15484,6 +15525,7 @@ function setCookiesOnRequest(stateManager, request) {
         const jar = yield getCookieJar(stateManager);
         const cookie = jar.getCookieStringSync(request.url);
         if (cookie.length > 0) {
+            // TODO: clean me up
             console.log(`${logPrefix} setting cookie header: ${cookie}`);
             request.headers = Object.assign(Object.assign({}, ((_a = request.headers) !== null && _a !== void 0 ? _a : {})), { cookie });
         }
@@ -15497,6 +15539,7 @@ function readCookiesFromResponse(stateManager, response) {
         console.log(`${logPrefix} readCookiesFromResponse starts`);
         const setCookies = response.headers['set-cookie'] || '';
         if (setCookies) {
+            // TODO: clean me up
             console.log(`${logPrefix} received set-cookie header: ${setCookies}`);
             yield updateCookieJar(stateManager, response.request.url, setCookies);
         }
