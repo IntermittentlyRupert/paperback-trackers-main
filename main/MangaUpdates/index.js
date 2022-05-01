@@ -15204,14 +15204,13 @@ exports.MangaUpdates = exports.MangaUpdatesInfo = void 0;
 const paperback_extensions_common_1 = require("paperback-extensions-common");
 const session = __importStar(require("./utils/mu-session"));
 exports.MangaUpdatesInfo = {
-    name: 'Anilist',
-    author: 'Faizan Durrani',
+    name: 'MangaUpdates',
+    author: 'IntermittentlyRupert',
     contentRating: paperback_extensions_common_1.ContentRating.EVERYONE,
     icon: 'icon.png',
-    version: '1.0.9',
-    description: 'Anilist Tracker',
-    authorWebsite: 'faizandurrani.github.io',
-    websiteBaseURL: 'https://anilist.co',
+    version: '0.1.0',
+    description: 'MangaUpdates Tracker',
+    websiteBaseURL: 'https://www.mangaupdates.com/',
 };
 class MangaUpdates extends paperback_extensions_common_1.Tracker {
     constructor() {
@@ -15294,6 +15293,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                                         })
                                     ]),
                                     onSubmit: (values) => __awaiter(this, void 0, void 0, function* () {
+                                        console.log(`[loginform.onSubmit] got values ${JSON.stringify(values)}`);
                                         if (!values.username) {
                                             throw new Error('Username must not be empty');
                                         }
