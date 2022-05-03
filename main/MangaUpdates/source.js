@@ -15318,7 +15318,8 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                 // I need to:
                 //   1. call interceptResponse for the 302 responses; or
                 //   2. find a way to disable redirects; or
-                //   3. get RequestManager to handle cookies for me
+                //   3. get RequestManager to handle cookies for me; or
+                //   4. something else???
                 const response = yield this.requestManager.schedule(createRequestObject({
                     url: 'https://www.mangaupdates.com/login.html',
                     method: 'POST',
