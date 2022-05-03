@@ -15306,6 +15306,19 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             try {
                 const username = encodeURIComponent(credentials.username);
                 const password = encodeURIComponent(credentials.password);
+                // TODO: This request returns the following redirect chain:
+                //   - HTTP 302 --> https://www.mangaupdates.com/login.html | set-cookie: secure_session=...
+                //   - HTTP 302 --> https://www.mangaupdates.com/submit.html
+                //   - HTTP 200
+                //
+                // RequestManager doesn't give me access to the 302 responses, which
+                // means I don't get the secure_session cookie, which means the
+                // login fails.
+                //
+                // I need to:
+                //   1. call interceptResponse for the 302 responses; or
+                //   2. find a way to disable redirects; or
+                //   3. get RequestManager to handle cookies for me
                 const response = yield this.requestManager.schedule(createRequestObject({
                     url: 'https://www.mangaupdates.com/login.html',
                     method: 'POST',
