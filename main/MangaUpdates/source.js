@@ -15248,7 +15248,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                         return [
                             createLabel({ id: 'userInfo', label: 'Logged-in as', value: username }),
                             createButton({ id: 'refresh', label: 'Refresh session', value: undefined, onTap: () => this.refreshSession(true) }),
-                            createButton({ id: 'logout', label: 'Logout', value: undefined, onTap: () => session.clearUserCredentials(this.stateManager) }),
+                            createButton({ id: 'logout', label: 'Logout', value: undefined, onTap: () => this.logout() }),
                         ];
                     }
                     return [
@@ -15357,9 +15357,17 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                 console.log(`${logPrefix} no credentials available, unable to refresh`);
                 throw new Error('Could not find login credentials!');
             }
-            yield session.clearCookies(this.stateManager);
+            yield this.logout();
             yield this.login(credentials);
             console.log(`${logPrefix} complete`);
+        });
+    }
+    logout() {
+        return __awaiter(this, void 0, void 0, function* () {
+            yield Promise.all([
+                session.clearUserCredentials(this.stateManager),
+                session.clearCookies(this.stateManager),
+            ]);
         });
     }
 }
@@ -15377,7 +15385,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clearCookies = exports.readCookiesFromResponse = exports.setCookiesOnRequest = exports.clearUserCredentials = exports.getLoggedInUser = exports.setUserCredentials = exports.getUserCredentials = exports.validateCredentials = void 0;
+exports.clearCookies = exports.readCookiesFromResponse = exports.setCookiesOnRequest = exports.getLoggedInUser = exports.clearUserCredentials = exports.setUserCredentials = exports.getUserCredentials = exports.validateCredentials = void 0;
 const tough_cookie_1 = require("tough-cookie");
 const logPrefix = '[mu-session]';
 const STATE_MU_CREDENTIALS = 'mu_credentials';
@@ -15448,6 +15456,14 @@ function setUserCredentials(stateManager, credentials) {
     });
 }
 exports.setUserCredentials = setUserCredentials;
+function clearUserCredentials(stateManager) {
+    return __awaiter(this, void 0, void 0, function* () {
+        console.log(`${logPrefix} logout starts`);
+        yield stateManager.keychain.store(STATE_MU_CREDENTIALS, undefined);
+        console.log(`${logPrefix} logout complete`);
+    });
+}
+exports.clearUserCredentials = clearUserCredentials;
 function getLoggedInUser(stateManager) {
     return __awaiter(this, void 0, void 0, function* () {
         const [credentials, jar] = yield Promise.all([
@@ -15458,14 +15474,6 @@ function getLoggedInUser(stateManager) {
     });
 }
 exports.getLoggedInUser = getLoggedInUser;
-function clearUserCredentials(stateManager) {
-    return __awaiter(this, void 0, void 0, function* () {
-        console.log(`${logPrefix} logout starts`);
-        yield stateManager.keychain.store(STATE_MU_CREDENTIALS, undefined);
-        console.log(`${logPrefix} logout complete`);
-    });
-}
-exports.clearUserCredentials = clearUserCredentials;
 function setCookiesOnRequest(stateManager, request) {
     var _a;
     return __awaiter(this, void 0, void 0, function* () {
