@@ -404,6 +404,7 @@ exports.MangaUpdatesInfo = {
     name: 'MangaUpdates',
     author: 'IntermittentlyRupert',
     contentRating: paperback_extensions_common_1.ContentRating.EVERYONE,
+    // TODO: generate an actual proper PNG from the SVG
     icon: 'icon.png',
     version: '0.1.0',
     description: 'MangaUpdates Tracker',
@@ -455,9 +456,23 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                     const username = (_a = (yield session.getUserCredentials(this.stateManager))) === null || _a === void 0 ? void 0 : _a.username;
                     if (username) {
                         return [
-                            createLabel({ id: 'userInfo', label: 'Logged-in as', value: username }),
-                            createButton({ id: 'refresh', label: 'Refresh session', value: undefined, onTap: () => this.refreshSession() }),
-                            createButton({ id: 'logout', label: 'Logout', value: undefined, onTap: () => this.logout() }),
+                            createLabel({
+                                id: 'userInfo',
+                                label: 'Logged-in as',
+                                value: username,
+                            }),
+                            createButton({
+                                id: 'refresh',
+                                label: 'Refresh session',
+                                value: undefined,
+                                onTap: () => this.refreshSession(),
+                            }),
+                            createButton({
+                                id: 'logout',
+                                label: 'Logout',
+                                value: undefined,
+                                onTap: () => this.logout(),
+                            }),
                         ];
                     }
                     return [
@@ -471,21 +486,35 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                                         id: 'username_section',
                                         header: 'Username',
                                         footer: 'Enter your MangaUpdates account username',
-                                        rows: () => Promise.resolve([createInputField({ id: 'username', placeholder: 'Username', value: '', maskInput: false })])
+                                        rows: () => Promise.resolve([
+                                            createInputField({
+                                                id: 'username',
+                                                placeholder: 'Username',
+                                                value: '',
+                                                maskInput: false,
+                                            }),
+                                        ]),
                                     }),
                                     createSection({
                                         id: 'password_section',
                                         header: 'Password',
                                         footer: 'Enter the password associated with your MangaUpdates account Username',
-                                        rows: () => Promise.resolve([createInputField({ id: 'password', placeholder: 'Password', value: '', maskInput: true })])
+                                        rows: () => Promise.resolve([
+                                            createInputField({
+                                                id: 'password',
+                                                placeholder: 'Password',
+                                                value: '',
+                                                maskInput: true,
+                                            }),
+                                        ]),
                                     }),
                                 ]),
                                 onSubmit: (values) => this.login(values),
                                 validate: () => Promise.resolve(true),
-                            })
-                        })
+                            }),
+                        }),
                     ];
-                })
+                }),
             });
         });
     }
@@ -530,7 +559,8 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                     url: 'https://www.mangaupdates.com/submit.html',
                     method: 'GET',
                 }), 0);
-                if (userProfileResponse.status > 399 || !userProfileResponse.data.includes(`Welcome back, ${credentials.username}`)) {
+                if (userProfileResponse.status > 399 ||
+                    !userProfileResponse.data.includes(`Welcome back, ${credentials.username}`)) {
                     console.log(`${logPrefix} profile check failed (${userProfileResponse.status}): ${userProfileResponse.data}`);
                     throw new Error('Incorrect username/password!');
                 }
