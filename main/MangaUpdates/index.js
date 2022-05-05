@@ -683,6 +683,14 @@ function getFirstLine(str) {
     // find the first non-empty line in the string
     return str.trim().split('\n').map(line => line.trim()).find(line => line) || '';
 }
+function parseTitles($, html) {
+    const mainTitle = $(MANGA_TITLE_MAIN, html).text().trim();
+    const altTitles = getSectionContent($, html, 'Associated Names')
+        .text()
+        .split('\n')
+        .map(title => title.trim());
+    return [mainTitle, ...altTitles].filter(title => title && title !== 'N/A');
+}
 function parseStatus($, html) {
     var _a;
     // NOTE: There can be a decent amount of variation in the format here.
@@ -716,34 +724,40 @@ function parseStatus($, html) {
     }
     return paperback_extensions_common_1.MangaStatus.UNKNOWN;
 }
-// TODO
 function parseRating($, html) {
-    return undefined;
+    const ratingText = getFirstLine(getSectionContent($, html, 'User Rating').text());
+    const ratingMatch = /([\d.])\s*\/\s*10\.0/.exec(ratingText);
+    if (!ratingMatch) {
+        return undefined;
+    }
+    const rating = parseFloat(ratingMatch[1] || '');
+    return isNaN(rating) ? undefined : rating;
 }
-// TODO
 function parseGenres($, html) {
-    return [];
+    const genres = [];
+    getSectionContent($, html, 'Genre').find('a').map((_i, item) => {
+        const href = $(item).attr('href') || '';
+        if (/series.html\?.*act=genresearch/.exec(href)) {
+            genres.push($(item).text().trim());
+        }
+    });
+    return genres;
 }
 function parseManga($, html, mangaId) {
-    const titles = [
-        $(MANGA_TITLE_MAIN, html).text().trim(),
-        ...getSectionContent($, html, 'Associated Names')
-            .text()
-            .split('\n')
-            .map(title => title.trim())
-    ].filter(title => title && title !== 'N/A');
+    const info = {
+        titles: parseTitles($, html),
+        image: getSectionContent($, html, 'Image').find('img').attr('src') || '',
+        author: getFirstLine(getSectionContent($, html, 'Author(s)').text()),
+        artist: getFirstLine(getSectionContent($, html, 'Artist(s)').text()),
+        desc: $('#div_desc_more', html).text().trim(),
+        status: parseStatus($, html),
+        rating: parseRating($, html),
+        hentai: parseGenres($, html).some(genre => IS_HENTAI_GENRE[genre]),
+    };
+    console.log(`${logPrefix} parsed manga (id=${mangaId}): ${JSON.stringify(info)}`);
     return createTrackedManga({
         id: mangaId,
-        mangaInfo: createMangaInfo({
-            titles,
-            image: getSectionContent($, html, 'Image').find('img').attr('src') || '',
-            author: getFirstLine(getSectionContent($, html, 'Author(s)').text()),
-            artist: getFirstLine(getSectionContent($, html, 'Artist(s)').text()),
-            desc: $('#div_desc_more', html).text().trim(),
-            status: parseStatus($, html),
-            rating: parseRating($, html),
-            hentai: parseGenres($, html).some(genre => IS_HENTAI_GENRE[genre]),
-        })
+        mangaInfo: createMangaInfo(info)
     });
 }
 exports.parseManga = parseManga;
