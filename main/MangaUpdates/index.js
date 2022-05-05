@@ -402,13 +402,13 @@ const paperback_extensions_common_1 = require("paperback-extensions-common");
 const sessionUtils = __importStar(require("./utils/mu-session"));
 const searchUtils = __importStar(require("./utils/mu-search"));
 const mangaUtils = __importStar(require("./utils/mu-manga"));
+const listUtils = __importStar(require("./utils/mu-lists"));
 exports.MangaUpdatesInfo = {
     name: 'MangaUpdates',
     author: 'IntermittentlyRupert',
     contentRating: paperback_extensions_common_1.ContentRating.EVERYONE,
-    // TODO: generate an actual proper PNG from the SVG
     icon: 'icon.png',
-    version: '0.1.0',
+    version: '1.0.0',
     description: 'MangaUpdates Tracker',
     websiteBaseURL: 'https://www.mangaupdates.com',
 };
@@ -459,7 +459,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
     getMangaForm(mangaId) {
         return createForm({
             sections: () => __awaiter(this, void 0, void 0, function* () {
-                var _a;
+                var _a, _b;
                 const username = (_a = (yield sessionUtils.getUserCredentials(this.stateManager))) === null || _a === void 0 ? void 0 : _a.username;
                 if (!username) {
                     return [
@@ -475,13 +475,19 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                         })
                     ];
                 }
-                const [avatarUrl, customLists, mangaPage] = yield Promise.all([
+                const [avatarUrl, lists, mangaPage] = yield Promise.all([
                     this.getLoggedInUserAvatarUrl(),
-                    this.getCustomListNames(),
+                    this.getLists(),
                     this.loadMangaPage(mangaId),
                 ]);
                 const info = mangaUtils.getMangaInfo(this.cheerio, mangaPage, mangaId);
-                const status = mangaUtils.getListInfo(this.cheerio, mangaPage, mangaId);
+                const status = listUtils.getListInfo(this.cheerio, mangaPage, mangaId);
+                const listId = (_b = lists.find(list => list.listName === status.listName)) === null || _b === void 0 ? void 0 : _b.listId;
+                if (!listId) {
+                    console.log(`[getMangaForm] unable to find list: ${JSON.stringify({ info, status, lists })}}`);
+                    throw new Error('Unknown manga list!');
+                }
+                const listNamesById = Object.fromEntries(lists.map(list => [list.listId, list.listName]));
                 return [
                     createSection({
                         id: 'userInfo',
@@ -535,20 +541,12 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                         footer: 'Warning: Setting this to "None" will delete the listing from MangaUpdates',
                         rows: () => Promise.resolve([
                             createSelect({
-                                id: 'listName',
-                                value: [status.list === 'None' ? 'Reading List' : status.list],
+                                id: 'listId',
+                                value: [listId],
                                 allowsMultiselect: false,
                                 label: 'List',
-                                displayLabel: (value) => value,
-                                options: [
-                                    'None',
-                                    'Reading List',
-                                    'Wish List',
-                                    'Complete List',
-                                    'Unfinished List',
-                                    'On Hold List',
-                                    ...customLists
-                                ]
+                                displayLabel: (value) => listNamesById[value] || '<unknown list>',
+                                options: lists.map(list => list.listId)
                             })
                         ])
                     }),
@@ -572,7 +570,6 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                             })
                         ])
                     }),
-                    // TODO: rating
                 ];
             }),
             onSubmit: (values) => this.handleMangaFormChanges(values),
@@ -696,6 +693,8 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                 };
                 try {
                     console.log(`${logPrefix} processing action: ${JSON.stringify(params)}`);
+                    // This will automatically add the manga to the Reading List if
+                    // it's not already in a list.
                     yield this.setMangaProgress(params);
                     yield actionQueue.discardChapterReadAction(action);
                 }
@@ -792,21 +791,26 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
     handleMangaFormChanges(values) {
         return __awaiter(this, void 0, void 0, function* () {
             const logPrefix = '[handleMangaFormChanges]';
-            console.log(`${logPrefix} starts`);
+            console.log(`${logPrefix} starts: ${JSON.stringify(values)}`);
             // These requests are all idempotent, so it's fairly safe for us to make
             // them unconditionally. If somebody makes a change via the website
             // between when they load the form and when they submit it, then I'll
             // clobber that change, but also don't do silly things like that.
             try {
-                const listId = yield this.getListId(values.listName);
-                yield Promise.all([
-                    this.setMangaList({ mangaId: values.mangaId, listId }),
-                    this.setMangaProgress({
+                const actions = [
+                    this.setMangaList({
+                        mangaId: values.mangaId,
+                        listId: values.listId[0]
+                    }),
+                ];
+                if (values.listId[0] !== listUtils.STANDARD_LIST_IDs.None) {
+                    actions.push(this.setMangaProgress({
                         mangaId: values.mangaId,
                         volumeProgress: values.volumeProgress,
                         chapterProgress: values.chapterProgress,
-                    })
-                ]);
+                    }));
+                }
+                yield Promise.all(actions);
             }
             catch (e) {
                 console.log(`${logPrefix} failed`);
@@ -825,7 +829,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                 `l=${encodeURIComponent(params.listId)}`,
                 `cache_j=${Math.floor(100000000 * Math.random())},${Math.floor(100000000 * Math.random())},${Math.floor(100000000 * Math.random())}`
             ];
-            if (params.listId === mangaUtils.STANDARD_LIST_IDs.None) {
+            if (params.listId === listUtils.STANDARD_LIST_IDs.None) {
                 // deletion flag
                 query.push('r=1');
             }
@@ -880,48 +884,79 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             return response.data;
         });
     }
-    // TODO: load custom lists
-    getCustomListNames() {
+    getLists() {
         return __awaiter(this, void 0, void 0, function* () {
-            return [];
-        });
-    }
-    getListId(listName) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const standardListId = mangaUtils.STANDARD_LIST_IDs[listName];
-            if (standardListId) {
-                return standardListId;
+            const standardLists = Object.entries(listUtils.STANDARD_LIST_IDs).map(([listName, listId]) => ({ listId, listName }));
+            const customListsResponse = yield this.requestManager.schedule(createRequestObject({
+                url: 'https://www.mangaupdates.com/mylist.html?act=edit',
+                method: 'GET',
+            }), 1);
+            if (customListsResponse.status > 299) {
+                console.log(`[getLists] failed (${customListsResponse.status}): ${customListsResponse.data}`);
+                throw new Error('Custom lists request failed!');
             }
-            // TODO: get custom list IDs
-            console.log(`[getListId] could not find list "${listName}`);
-            throw new Error('Could not find list!');
+            const customLists = listUtils.getCustomLists(this.cheerio, customListsResponse.data);
+            return [...standardLists, ...customLists];
         });
     }
 }
 exports.MangaUpdates = MangaUpdates;
 
-},{"./utils/mu-manga":49,"./utils/mu-search":50,"./utils/mu-session":51,"paperback-extensions-common":4}],49:[function(require,module,exports){
+},{"./utils/mu-lists":49,"./utils/mu-manga":50,"./utils/mu-search":51,"./utils/mu-session":52,"paperback-extensions-common":4}],49:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getListInfo = exports.getMangaInfo = exports.STANDARD_LIST_IDs = void 0;
-const logPrefix = '[mu-manga]';
-const MANGA_TITLE_MAIN = '#main_content .tabletitle';
-const MANGA_INFO_COLUMNS = '#main_content > .p-2:nth-child(2) > .row > .col-6';
+exports.getCustomLists = exports.getListInfo = exports.STANDARD_LIST_IDs = void 0;
+const logPrefix = 'mu-lists';
 const MANGA_LIST_NAME = '#showList > .my-auto u';
 const MANGA_PROGRESS_VOLUMES = '#chap-links a[title="Increment Volume"]';
 const MANGA_PROGRESS_CHAPTERS = '#chap-links a[title="Increment Chapter"]';
+const CUSTOM_LIST_NAMES = '#main_content form:last-child .lrow.col-3 input[type="text"]';
+exports.STANDARD_LIST_IDs = {
+    'None': '-1',
+    'Reading List': '0',
+    'Wish List': '1',
+    'Complete List': '2',
+    'Unfinished List': '3',
+    'On Hold List': '4',
+};
+function getListInfo($, html, mangaId) {
+    const info = {
+        listName: $(MANGA_LIST_NAME, html).text().trim() || 'None',
+        volumeProgress: parseInt($(MANGA_PROGRESS_VOLUMES, html).text().trim().slice(2)) || 0,
+        chapterProgress: parseInt($(MANGA_PROGRESS_CHAPTERS, html).text().trim().slice(2)) || 0,
+    };
+    console.log(`${logPrefix} parsed list info (id=${mangaId}): ${JSON.stringify(info)}`);
+    return info;
+}
+exports.getListInfo = getListInfo;
+function getCustomLists($, html) {
+    const customLists = [];
+    $(CUSTOM_LIST_NAMES, html).map((i, item) => {
+        const listIdString = $(item).attr('name') || '';
+        const listIdMatches = /lists\[(\d+)\]\[title\]/.exec(listIdString);
+        const listId = listIdMatches ? listIdMatches[1] : null;
+        const listName = $(item).attr('value');
+        if (!listId || !listName) {
+            console.log(`${logPrefix} failed to parse custom lists (idx=${i}): ${html}`);
+            throw new Error('Failed to parse custom lists!');
+        }
+        customLists.push({ listId, listName });
+    });
+    return customLists;
+}
+exports.getCustomLists = getCustomLists;
+
+},{}],50:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getMangaInfo = void 0;
+const logPrefix = '[mu-manga]';
+const MANGA_TITLE_MAIN = '#main_content .tabletitle';
+const MANGA_INFO_COLUMNS = '#main_content > .p-2:nth-child(2) > .row > .col-6';
 const IS_HENTAI_GENRE = {
     Adult: true,
     Hentai: true,
     Smut: true,
-};
-exports.STANDARD_LIST_IDs = {
-    'None': -1,
-    'Reading List': 0,
-    'Wish List': 1,
-    'Complete List': 2,
-    'Unfinished List': 3,
-    'On Hold List': 4,
 };
 function getSectionContent($, html, title) {
     const columns = $(MANGA_INFO_COLUMNS, html);
@@ -998,7 +1033,7 @@ function parseStatus($, html) {
 }
 function parseRating($, html) {
     const ratingText = getFirstLine(getSectionContent($, html, 'User Rating').text());
-    const ratingMatch = /([\d.])\s*\/\s*10\.0/.exec(ratingText);
+    const ratingMatch = /([\d.]+)\s*\/\s*10\.0/.exec(ratingText);
     if (!ratingMatch) {
         return undefined;
     }
@@ -1033,18 +1068,8 @@ function getMangaInfo($, html, mangaId) {
     return info;
 }
 exports.getMangaInfo = getMangaInfo;
-function getListInfo($, html, mangaId) {
-    const info = {
-        list: $(MANGA_LIST_NAME, html).text().trim() || 'None',
-        volumeProgress: parseInt($(MANGA_PROGRESS_VOLUMES, html).text().trim().slice(2)) || 0,
-        chapterProgress: parseInt($(MANGA_PROGRESS_CHAPTERS, html).text().trim().slice(2)) || 0,
-    };
-    console.log(`${logPrefix} parsed list info (id=${mangaId}): ${JSON.stringify(info)}`);
-    return info;
-}
-exports.getListInfo = getListInfo;
 
-},{}],50:[function(require,module,exports){
+},{}],51:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseSearchResults = void 0;
@@ -1083,7 +1108,7 @@ function parseSearchResults($, html) {
 }
 exports.parseSearchResults = parseSearchResults;
 
-},{}],51:[function(require,module,exports){
+},{}],52:[function(require,module,exports){
 "use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
