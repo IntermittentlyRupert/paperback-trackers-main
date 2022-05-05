@@ -440,21 +440,14 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
     ////////////////////
     getTrackedManga(mangaId) {
         return __awaiter(this, void 0, void 0, function* () {
-            const logPrefix = '[getSearchResults]';
+            const logPrefix = '[getTrackedManga]';
             console.log(`${logPrefix} starts`);
             try {
                 console.log(`${logPrefix} loading id=${mangaId}`);
-                const response = yield this.requestManager.schedule(createRequestObject({
-                    url: `https://www.mangaupdates.com/series.html?id=${encodeURIComponent(mangaId)}`,
-                    method: 'GET',
-                }), 1);
-                if (response.status > 299) {
-                    console.log(`${logPrefix} failed (${response.status}): ${response.data}`);
-                    throw new Error('Manga request failed!');
-                }
-                const result = mangaUtils.parseManga(this.cheerio, response.data, mangaId);
+                const html = yield this.loadMangaPage(mangaId);
+                const info = mangaUtils.getMangaInfo(this.cheerio, html, mangaId);
                 console.log(`${logPrefix} complete`);
-                return result;
+                return createTrackedManga({ id: mangaId, mangaInfo: createMangaInfo(info) });
             }
             catch (e) {
                 console.log(`${logPrefix} error`);
@@ -463,9 +456,152 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             }
         });
     }
-    /** TODO */
     getMangaForm(mangaId) {
-        throw new Error('unimplemented');
+        return createForm({
+            sections: () => __awaiter(this, void 0, void 0, function* () {
+                var _a;
+                const username = (_a = (yield sessionUtils.getUserCredentials(this.stateManager))) === null || _a === void 0 ? void 0 : _a.username;
+                if (!username) {
+                    return [
+                        createSection({
+                            id: 'notLoggedInSection',
+                            rows: () => Promise.resolve([
+                                createLabel({
+                                    id: 'notLoggedIn',
+                                    label: 'Not Logged In',
+                                    value: undefined
+                                })
+                            ])
+                        })
+                    ];
+                }
+                const [avatarUrl, customLists, mangaPage] = yield Promise.all([
+                    this.getLoggedInUserAvatarUrl(),
+                    this.getCustomListNames(),
+                    this.loadMangaPage(mangaId),
+                ]);
+                const info = mangaUtils.getMangaInfo(this.cheerio, mangaPage, mangaId);
+                const status = mangaUtils.getListInfo(this.cheerio, mangaPage, mangaId);
+                return [
+                    createSection({
+                        id: 'userInfo',
+                        rows: () => Promise.resolve([
+                            createHeader({
+                                id: 'header',
+                                imageUrl: avatarUrl,
+                                title: username,
+                                subtitle: '',
+                                value: undefined
+                            })
+                        ])
+                    }),
+                    createSection({
+                        id: 'information',
+                        header: 'Information',
+                        rows: () => {
+                            var _a, _b, _c, _d;
+                            return Promise.resolve([
+                                createLabel({
+                                    id: 'mangaId',
+                                    label: 'Manga ID',
+                                    value: mangaId,
+                                }),
+                                createLabel({
+                                    id: 'mangaTitle',
+                                    label: 'Title',
+                                    value: info.titles[0],
+                                }),
+                                createLabel({
+                                    id: 'mangaRating',
+                                    value: (_b = (_a = info.rating) === null || _a === void 0 ? void 0 : _a.toString()) !== null && _b !== void 0 ? _b : 'N/A',
+                                    label: 'Rating'
+                                }),
+                                createLabel({
+                                    id: 'mangaStatus',
+                                    value: info.status.toString(),
+                                    label: 'Status'
+                                }),
+                                createLabel({
+                                    id: 'mangaIsAdult',
+                                    value: (_d = (_c = info.hentai) === null || _c === void 0 ? void 0 : _c.toString()) !== null && _d !== void 0 ? _d : 'N/A',
+                                    label: 'Is Adult'
+                                })
+                            ]);
+                        }
+                    }),
+                    createSection({
+                        id: 'trackStatus',
+                        header: 'Manga Status',
+                        footer: 'Warning: Setting this to "None" will delete the listing from MangaUpdates',
+                        rows: () => Promise.resolve([
+                            createSelect({
+                                id: 'status',
+                                value: [status.list === 'None' ? 'Reading List' : status.list],
+                                allowsMultiselect: false,
+                                label: 'Status',
+                                displayLabel: (value) => value,
+                                options: [
+                                    'None',
+                                    'Reading List',
+                                    'Wish List',
+                                    'Complete List',
+                                    'Unfinished List',
+                                    'On Hold List',
+                                    ...customLists
+                                ]
+                            })
+                        ])
+                    }),
+                    createSection({
+                        id: 'manage',
+                        header: 'Progress',
+                        rows: () => Promise.resolve([
+                            createStepper({
+                                id: 'progress',
+                                label: 'Chapter',
+                                value: status.chapterProgress,
+                                min: 0,
+                                step: 1
+                            }),
+                            createStepper({
+                                id: 'progressVolumes',
+                                label: 'Volume',
+                                value: status.volumeProgress,
+                                min: 0,
+                                step: 1
+                            })
+                        ])
+                    }),
+                    // TODO: ratings
+                    // createSection({
+                    //     id: 'rateSection',
+                    //     header: 'Rating',
+                    //     rows: async () => [
+                    //         createStepper({
+                    //             id: 'score',
+                    //             label: 'Score',
+                    //             value: anilistManga.mediaListEntry?.score ?? 0,
+                    //             min: 0,
+                    //             max: 10,
+                    //             step: 0.1
+                    //         })
+                    //     ]
+                    // })
+                ];
+            }),
+            onSubmit: (values) => __awaiter(this, void 0, void 0, function* () {
+                // TODO: list updates
+                // TODO: handle custom lists
+                // TO CHANGE LIST:
+                // https://www.mangaupdates.com/ajax/list_update.php?
+                // s=<manga ID>
+                // l=<numeric list ID>
+                // r=1 <--- only if deleting
+                // cache_j=<cache busting random numbers - search page js bundle>
+                // TODO: figure out how to change progress
+            }),
+            validate: () => Promise.resolve(true)
+        });
     }
     getSourceMenu() {
         return __awaiter(this, void 0, void 0, function* () {
@@ -571,7 +707,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             }
         });
     }
-    /** TODO */
+    // TODO: processActionQueue
     processActionQueue(actionQueue) {
         return __awaiter(this, void 0, void 0, function* () {
             yield Promise.resolve();
@@ -642,20 +778,75 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             ]);
         });
     }
+    getLoggedInUserAvatarUrl() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const response = yield this.requestManager.schedule(createRequestObject({
+                url: 'https://www.mangaupdates.com/submit.html?act=edit_profile',
+                method: 'GET',
+            }), 1);
+            // not worth throwing here - we'll just return the fallback image
+            if (response.status > 299) {
+                console.log(`[getLoggedInUserAvatarUrl] failed (${response.status}): ${response.data}`);
+            }
+            return sessionUtils.getUserProfileImage(this.cheerio, response.data);
+        });
+    }
+    ////////////////////
+    // Other Data Fetching
+    ////////////////////
+    loadMangaPage(mangaId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const response = yield this.requestManager.schedule(createRequestObject({
+                url: `https://www.mangaupdates.com/series.html?id=${encodeURIComponent(mangaId)}`,
+                method: 'GET',
+            }), 1);
+            if (response.status > 299) {
+                console.log(`[loadMangaInfo] failed (${response.status}): ${response.data}`);
+                throw new Error('Manga request failed!');
+            }
+            return response.data;
+        });
+    }
+    // TODO: load custom lists
+    getCustomListNames() {
+        return __awaiter(this, void 0, void 0, function* () {
+            return [];
+        });
+    }
 }
 exports.MangaUpdates = MangaUpdates;
 
 },{"./utils/mu-manga":49,"./utils/mu-search":50,"./utils/mu-session":51,"paperback-extensions-common":4}],49:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.parseManga = void 0;
+exports.getListInfo = exports.getMangaInfo = exports.LIST_NAME = exports.List = void 0;
 const logPrefix = '[mu-manga]';
 const MANGA_TITLE_MAIN = '#main_content .tabletitle';
 const MANGA_INFO_COLUMNS = '#main_content > .p-2:nth-child(2) > .row > .col-6';
+const MANGA_LIST_NAME = '#showList > .my-auto u';
+const MANGA_PROGRESS_VOLUMES = '#chap-links a[title="Increment Volume"]';
+const MANGA_PROGRESS_CHAPTERS = '#chap-links a[title="Increment Chapter"]';
 const IS_HENTAI_GENRE = {
     Adult: true,
     Hentai: true,
     Smut: true,
+};
+var List;
+(function (List) {
+    List["NONE"] = "-1";
+    List["READING"] = "0";
+    List["WISH"] = "1";
+    List["COMPLETE"] = "2";
+    List["UNFINISHED"] = "3";
+    List["ON_HOLD"] = "4";
+})(List = exports.List || (exports.List = {}));
+exports.LIST_NAME = {
+    [List.NONE]: 'None',
+    [List.READING]: 'Reading',
+    [List.WISH]: 'Wish List',
+    [List.COMPLETE]: 'Complete',
+    [List.UNFINISHED]: 'Unfinished',
+    [List.ON_HOLD]: 'On Hold',
 };
 function getSectionContent($, html, title) {
     const columns = $(MANGA_INFO_COLUMNS, html);
@@ -749,11 +940,12 @@ function parseGenres($, html) {
     });
     return genres;
 }
-function parseManga($, html, mangaId) {
+function getMangaInfo($, html, mangaId) {
     const info = {
         titles: parseTitles($, html),
-        desc: $('#div_desc_more', html).text().trim(),
         image: getSectionContent($, html, 'Image').find('img').attr('src') || '',
+        // Long descriptions are under a cut, but there's an ID we can use
+        desc: $('#div_desc_more', html).text().trim() || getSectionContent($, html, 'Description').text(),
         author: getFirstLine(getSectionContent($, html, 'Author(s)').text()),
         artist: getFirstLine(getSectionContent($, html, 'Artist(s)').text()),
         // The type for `status` is lies - it actually expects the string name of the enum value
@@ -763,12 +955,19 @@ function parseManga($, html, mangaId) {
         hentai: parseGenres($, html).some(genre => IS_HENTAI_GENRE[genre]),
     };
     console.log(`${logPrefix} parsed manga (id=${mangaId}): ${JSON.stringify(info)}`);
-    return createTrackedManga({
-        id: mangaId,
-        mangaInfo: createMangaInfo(info)
-    });
+    return info;
 }
-exports.parseManga = parseManga;
+exports.getMangaInfo = getMangaInfo;
+function getListInfo($, html, mangaId) {
+    const info = {
+        list: $(MANGA_LIST_NAME, html).text().trim() || 'None',
+        volumeProgress: parseInt($(MANGA_PROGRESS_VOLUMES, html).text().trim().slice(2)) || 0,
+        chapterProgress: parseInt($(MANGA_PROGRESS_CHAPTERS, html).text().trim().slice(2)) || 0,
+    };
+    console.log(`${logPrefix} parsed list info (id=${mangaId}): ${JSON.stringify(info)}`);
+    return info;
+}
+exports.getListInfo = getListInfo;
 
 },{}],50:[function(require,module,exports){
 "use strict";
@@ -821,10 +1020,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clearCookies = exports.addCookies = exports.getCookies = exports.clearUserCredentials = exports.setUserCredentials = exports.getUserCredentials = exports.validateCredentials = void 0;
+exports.getUserProfileImage = exports.clearCookies = exports.addCookies = exports.getCookies = exports.clearUserCredentials = exports.setUserCredentials = exports.getUserCredentials = exports.validateCredentials = void 0;
 const logPrefix = '[mu-session]';
 const STATE_MU_CREDENTIALS = 'mu_credentials';
 const STATE_MU_COOKIES = 'mu_cookies';
+const USER_PROFILE_IMAGE = '#main_content img[name="avimage"]';
+const FALLBACK_IMAGE = 'https://cdn.mangaupdates.com/avatar/a0.gif';
 function isOptionalString(val) {
     return val == null || typeof val === 'string';
 }
@@ -976,6 +1177,10 @@ function clearCookies(stateManager) {
     });
 }
 exports.clearCookies = clearCookies;
+function getUserProfileImage($, html) {
+    return $(USER_PROFILE_IMAGE, html).attr('src') || FALLBACK_IMAGE;
+}
+exports.getUserProfileImage = getUserProfileImage;
 
 },{}]},{},[48])(48)
 });
