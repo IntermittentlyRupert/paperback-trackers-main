@@ -683,10 +683,29 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             }
         });
     }
-    // TODO: processActionQueue
     processActionQueue(actionQueue) {
         return __awaiter(this, void 0, void 0, function* () {
-            yield Promise.resolve();
+            const logPrefix = '[getSearchResults]';
+            console.log(`${logPrefix} starts`);
+            const chapterReadActions = yield actionQueue.queuedChapterReadActions();
+            for (const action of chapterReadActions) {
+                const params = {
+                    mangaId: action.mangaId,
+                    volumeProgress: action.volumeNumber || 1,
+                    chapterProgress: action.chapterNumber,
+                };
+                try {
+                    console.log(`${logPrefix} processing action: ${JSON.stringify(params)}`);
+                    yield this.setMangaProgress(params);
+                    yield actionQueue.discardChapterReadAction(action);
+                }
+                catch (e) {
+                    console.log(`${logPrefix} failed`);
+                    console.log(e);
+                    yield actionQueue.retryChapterReadAction(action);
+                }
+            }
+            console.log(`${logPrefix} complete`);
         });
     }
     ////////////////////
@@ -778,21 +797,16 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             // them unconditionally. If somebody makes a change via the website
             // between when they load the form and when they submit it, then I'll
             // clobber that change, but also don't do silly things like that.
-            //
-            // Since the manga progress request is dependent on the list ID, don't
-            // parallelise the requests in case the list has changed.
             try {
                 const listId = yield this.getListId(values.listName);
-                yield this.setMangaList({
-                    mangaId: values.mangaId,
-                    listId,
-                });
-                yield this.setMangaProgress({
-                    mangaId: values.mangaId,
-                    listId,
-                    volumeProgress: values.volumeProgress,
-                    chapterProgress: values.chapterProgress,
-                });
+                yield Promise.all([
+                    this.setMangaList({ mangaId: values.mangaId, listId }),
+                    this.setMangaProgress({
+                        mangaId: values.mangaId,
+                        volumeProgress: values.volumeProgress,
+                        chapterProgress: values.chapterProgress,
+                    })
+                ]);
             }
             catch (e) {
                 console.log(`${logPrefix} failed`);
@@ -832,11 +846,12 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             console.log(`${logPrefix} starts: ${JSON.stringify(params)}`);
             const query = [
                 'ver=2',
-                `lid=${encodeURIComponent(params.listId)}`,
                 `s=${encodeURIComponent(params.mangaId)}`,
                 `set_v=${encodeURIComponent(params.volumeProgress)}`,
                 `set_c=${encodeURIComponent(params.chapterProgress)}`,
                 `cache_j=${Math.floor(100000000 * Math.random())},${Math.floor(100000000 * Math.random())},${Math.floor(100000000 * Math.random())}`
+                // MangaUpdates sends this, but it doesn't seem to be necessary...
+                // `lid=${encodeURIComponent(params.listId)}`,
             ];
             const response = yield this.requestManager.schedule(createRequestObject({
                 url: `https://www.mangaupdates.com/ajax/chap_update.php?${query.join('&')}`,
@@ -1193,7 +1208,9 @@ function getRawCookies(stateManager) {
         return validRawCookies;
     });
 }
-// TODO: take the request URL and filter for cookies on the right domain
+// Currently I only make requests to `www.mangaupdates.com`. If I add requests
+// to _other_ domains in future, this will need to filter the cookies by request
+// domain.
 function getCookies(stateManager) {
     return __awaiter(this, void 0, void 0, function* () {
         const rawCookies = yield getRawCookies(stateManager);
