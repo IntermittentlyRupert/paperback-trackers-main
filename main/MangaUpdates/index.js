@@ -649,7 +649,6 @@ exports.MangaUpdates = MangaUpdates;
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseManga = void 0;
-const paperback_extensions_common_1 = require("paperback-extensions-common");
 const logPrefix = '[mu-manga]';
 const MANGA_TITLE_MAIN = '#main_content .tabletitle';
 const MANGA_INFO_COLUMNS = '#main_content > .p-2:nth-child(2) > .row > .col-6';
@@ -661,22 +660,29 @@ const IS_HENTAI_GENRE = {
 function getSectionContent($, html, title) {
     const columns = $(MANGA_INFO_COLUMNS, html);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const matchesTitle = (el) => (!!el
-        && $(el).hasClass('sCat')
-        && $('b', el).text().trim() === title);
+    const isSectionHeader = (el) => !!el && $(el).hasClass('sCat');
+    const debugSectionsFound = [];
     const leftColSections = $(columns[0]).children();
     for (let i = 0; i < leftColSections.length - 1; i++) {
-        if (matchesTitle(leftColSections[i])) {
-            return $(leftColSections[i + 1]);
+        if (isSectionHeader(leftColSections[i])) {
+            const currTitle = $('b', leftColSections[i]).text().trim();
+            debugSectionsFound.push(currTitle);
+            if (currTitle === title) {
+                return $(leftColSections[i + 1]);
+            }
         }
     }
-    const rightColSections = $(columns[0]).children();
+    const rightColSections = $(columns[1]).children();
     for (let i = 0; i < rightColSections.length - 1; i++) {
-        if (matchesTitle(rightColSections[i])) {
-            return $(rightColSections[i + 1]);
+        if (isSectionHeader(rightColSections[i])) {
+            const currTitle = $('b', rightColSections[i]).text().trim();
+            debugSectionsFound.push(currTitle);
+            if (currTitle === title) {
+                return $(rightColSections[i + 1]);
+            }
         }
     }
-    console.log(`${logPrefix} failed to find section "${title}": ${html}`);
+    console.log(`${logPrefix} failed to find section "${title}": ${JSON.stringify(debugSectionsFound)}`);
     throw new Error('Failed to find section content');
 }
 function getFirstLine(str) {
@@ -711,18 +717,18 @@ function parseStatus($, html) {
     const statusMatch = /\(([a-zA-Z]+)\)/.exec(statusText);
     const status = statusMatch ? ((_a = statusMatch[1]) === null || _a === void 0 ? void 0 : _a.toLowerCase()) || '' : '';
     if (status.includes('incomplete') || status.includes('discontinued')) {
-        return paperback_extensions_common_1.MangaStatus.ABANDONED;
+        return 'ABANDONED';
     }
     if (status.includes('hiatus')) {
-        return paperback_extensions_common_1.MangaStatus.HIATUS;
+        return 'HIATUS';
     }
     if (status.includes('ongoing')) {
-        return paperback_extensions_common_1.MangaStatus.ONGOING;
+        return 'ONGOING';
     }
     if (status.includes('complete')) {
-        return paperback_extensions_common_1.MangaStatus.COMPLETED;
+        return 'COMPLETED';
     }
-    return paperback_extensions_common_1.MangaStatus.UNKNOWN;
+    return 'UNKNOWN';
 }
 function parseRating($, html) {
     const ratingText = getFirstLine(getSectionContent($, html, 'User Rating').text());
@@ -746,10 +752,12 @@ function parseGenres($, html) {
 function parseManga($, html, mangaId) {
     const info = {
         titles: parseTitles($, html),
+        desc: $('#div_desc_more', html).text().trim(),
         image: getSectionContent($, html, 'Image').find('img').attr('src') || '',
         author: getFirstLine(getSectionContent($, html, 'Author(s)').text()),
         artist: getFirstLine(getSectionContent($, html, 'Artist(s)').text()),
-        desc: $('#div_desc_more', html).text().trim(),
+        // The type for `status` is lies - it actually expects the string name of the enum value
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         status: parseStatus($, html),
         rating: parseRating($, html),
         hentai: parseGenres($, html).some(genre => IS_HENTAI_GENRE[genre]),
@@ -762,7 +770,7 @@ function parseManga($, html, mangaId) {
 }
 exports.parseManga = parseManga;
 
-},{"paperback-extensions-common":4}],50:[function(require,module,exports){
+},{}],50:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseSearchResults = void 0;
