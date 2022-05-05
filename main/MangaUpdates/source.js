@@ -401,6 +401,7 @@ exports.MangaUpdates = exports.MangaUpdatesInfo = void 0;
 const paperback_extensions_common_1 = require("paperback-extensions-common");
 const sessionUtils = __importStar(require("./utils/mu-session"));
 const searchUtils = __importStar(require("./utils/mu-search"));
+const mangaUtils = __importStar(require("./utils/mu-manga"));
 exports.MangaUpdatesInfo = {
     name: 'MangaUpdates',
     author: 'IntermittentlyRupert',
@@ -437,10 +438,29 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
     ////////////////////
     // Public API
     ////////////////////
-    /** TODO */
     getTrackedManga(mangaId) {
         return __awaiter(this, void 0, void 0, function* () {
-            throw new Error('unimplemented');
+            const logPrefix = '[getSearchResults]';
+            console.log(`${logPrefix} starts`);
+            try {
+                console.log(`${logPrefix} loading id=${mangaId}`);
+                const response = yield this.requestManager.schedule(createRequestObject({
+                    url: `https://www.mangaupdates.com/series.html?id=${encodeURIComponent(mangaId)}`,
+                    method: 'GET',
+                }), 1);
+                if (response.status > 299) {
+                    console.log(`${logPrefix} failed (${response.status}): ${response.data}`);
+                    throw new Error('Manga request failed!');
+                }
+                const result = mangaUtils.parseManga(this.cheerio, response.data, mangaId);
+                console.log(`${logPrefix} complete`);
+                return result;
+            }
+            catch (e) {
+                console.log(`${logPrefix} error`);
+                console.log(e);
+                throw e;
+            }
         });
     }
     /** TODO */
@@ -532,15 +552,15 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                     return createPagedResults({ results: [], metadata: { nextPage: null } });
                 }
                 console.log(`${logPrefix} searching for "${search}" (page=${page})`);
-                const searchResponse = yield this.requestManager.schedule(createRequestObject({
+                const response = yield this.requestManager.schedule(createRequestObject({
                     url: `https://www.mangaupdates.com/series.html?search=${encodeURIComponent(search)}&page=${encodeURIComponent(page)}`,
                     method: 'GET',
                 }), 1);
-                if (searchResponse.status > 299) {
-                    console.log(`${logPrefix} login error (${searchResponse.status}): ${searchResponse.data}`);
+                if (response.status > 299) {
+                    console.log(`${logPrefix} failed (${response.status}): ${response.data}`);
                     throw new Error('Search request failed!');
                 }
-                const results = searchUtils.parseSearchResults(this.cheerio, searchResponse.data);
+                const results = searchUtils.parseSearchResults(this.cheerio, response.data);
                 console.log(`${logPrefix} complete`);
                 return results;
             }
@@ -625,7 +645,110 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
 }
 exports.MangaUpdates = MangaUpdates;
 
-},{"./utils/mu-search":49,"./utils/mu-session":50,"paperback-extensions-common":4}],49:[function(require,module,exports){
+},{"./utils/mu-manga":49,"./utils/mu-search":50,"./utils/mu-session":51,"paperback-extensions-common":4}],49:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.parseManga = void 0;
+const paperback_extensions_common_1 = require("paperback-extensions-common");
+const logPrefix = '[mu-manga]';
+const MANGA_TITLE_MAIN = '#main_content .tabletitle';
+const MANGA_INFO_COLUMNS = '#main_content > .p-2:nth-child(2) > .row > .col-6';
+const IS_HENTAI_GENRE = {
+    Adult: true,
+    Hentai: true,
+    Smut: true,
+};
+function getSectionContent($, html, title) {
+    const columns = $(MANGA_INFO_COLUMNS, html);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const matchesTitle = (el) => (!!el
+        && $(el).hasClass('sCat')
+        && $('b', el).text().trim() === title);
+    const leftColSections = $(columns[0]).children();
+    for (let i = 0; i < leftColSections.length - 1; i++) {
+        if (matchesTitle(leftColSections[i])) {
+            return $(leftColSections[i + 1]);
+        }
+    }
+    const rightColSections = $(columns[0]).children();
+    for (let i = 0; i < rightColSections.length - 1; i++) {
+        if (matchesTitle(rightColSections[i])) {
+            return $(rightColSections[i + 1]);
+        }
+    }
+    console.log(`${logPrefix} failed to find section "${title}": ${html}`);
+    throw new Error('Failed to find section content');
+}
+function getFirstLine(str) {
+    // find the first non-empty line in the string
+    return str.trim().split('\n').map(line => line.trim()).find(line => line) || '';
+}
+function parseStatus($, html) {
+    var _a;
+    // NOTE: There can be a decent amount of variation in the format here.
+    //
+    // Series with multiple seasons (e.g. manhwa) may have something like:
+    //
+    //   > 38 Chapters (Ongoing)
+    //   >
+    //   > S1: 38 Chapters (Complete) 1~38
+    //   > S2: (TBA)
+    //
+    // Cancelled series can have something like:
+    //
+    //   > 4 Volumes (Incomplete due to the artist's death)
+    //
+    // Make sure to handle everything we reasonably can.
+    const statusText = getFirstLine(getSectionContent($, html, 'Status in Country of Origin').text());
+    const statusMatch = /\(([a-zA-Z]+)\)/.exec(statusText);
+    const status = statusMatch ? ((_a = statusMatch[1]) === null || _a === void 0 ? void 0 : _a.toLowerCase()) || '' : '';
+    if (status.includes('incomplete') || status.includes('discontinued')) {
+        return paperback_extensions_common_1.MangaStatus.ABANDONED;
+    }
+    if (status.includes('hiatus')) {
+        return paperback_extensions_common_1.MangaStatus.HIATUS;
+    }
+    if (status.includes('ongoing')) {
+        return paperback_extensions_common_1.MangaStatus.ONGOING;
+    }
+    if (status.includes('complete')) {
+        return paperback_extensions_common_1.MangaStatus.COMPLETED;
+    }
+    return paperback_extensions_common_1.MangaStatus.UNKNOWN;
+}
+// TODO
+function parseRating($, html) {
+    return undefined;
+}
+// TODO
+function parseGenres($, html) {
+    return [];
+}
+function parseManga($, html, mangaId) {
+    const titles = [
+        $(MANGA_TITLE_MAIN, html).text().trim(),
+        ...getSectionContent($, html, 'Associated Names')
+            .text()
+            .split('\n')
+            .map(title => title.trim())
+    ].filter(title => title && title !== 'N/A');
+    return createTrackedManga({
+        id: mangaId,
+        mangaInfo: createMangaInfo({
+            titles,
+            image: getSectionContent($, html, 'Image').find('img').attr('src') || '',
+            author: getFirstLine(getSectionContent($, html, 'Author(s)').text()),
+            artist: getFirstLine(getSectionContent($, html, 'Artist(s)').text()),
+            desc: $('#div_desc_more', html).text().trim(),
+            status: parseStatus($, html),
+            rating: parseRating($, html),
+            hentai: parseGenres($, html).some(genre => IS_HENTAI_GENRE[genre]),
+        })
+    });
+}
+exports.parseManga = parseManga;
+
+},{"paperback-extensions-common":4}],50:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseSearchResults = void 0;
@@ -664,7 +787,7 @@ function parseSearchResults($, html) {
 }
 exports.parseSearchResults = parseSearchResults;
 
-},{}],50:[function(require,module,exports){
+},{}],51:[function(require,module,exports){
 "use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
