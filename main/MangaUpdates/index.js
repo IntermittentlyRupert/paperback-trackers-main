@@ -399,7 +399,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MangaUpdates = exports.MangaUpdatesInfo = void 0;
 const paperback_extensions_common_1 = require("paperback-extensions-common");
-const session = __importStar(require("./utils/mu-session"));
+const sessionUtils = __importStar(require("./utils/mu-session"));
+const searchUtils = __importStar(require("./utils/mu-search"));
 exports.MangaUpdatesInfo = {
     name: 'MangaUpdates',
     author: 'IntermittentlyRupert',
@@ -419,7 +420,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             requestTimeout: 20000,
             interceptor: {
                 interceptRequest: (request) => __awaiter(this, void 0, void 0, function* () {
-                    request.cookies = yield session.getCookies(this.stateManager);
+                    request.cookies = yield sessionUtils.getCookies(this.stateManager);
                     return request;
                 }),
                 interceptResponse: (response) => __awaiter(this, void 0, void 0, function* () {
@@ -427,7 +428,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                     // TODO: clean this up once new paperback-extensions-common is released
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const cookies = this.requestManager.cookieStore.getAllCookies();
-                    yield session.addCookies(this.stateManager, cookies);
+                    yield sessionUtils.addCookies(this.stateManager, cookies);
                     return response;
                 }),
             },
@@ -453,7 +454,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                 header: 'Source Menu',
                 rows: () => __awaiter(this, void 0, void 0, function* () {
                     var _a;
-                    const username = (_a = (yield session.getUserCredentials(this.stateManager))) === null || _a === void 0 ? void 0 : _a.username;
+                    const username = (_a = (yield sessionUtils.getUserCredentials(this.stateManager))) === null || _a === void 0 ? void 0 : _a.username;
                     if (username) {
                         return [
                             createLabel({
@@ -518,10 +519,36 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             });
         });
     }
-    /** TODO */
     getSearchResults(query, metadata) {
         return __awaiter(this, void 0, void 0, function* () {
-            return createPagedResults({ results: [] });
+            const logPrefix = '[getSearchResults]';
+            console.log(`${logPrefix} starts`);
+            try {
+                const search = query.title || '';
+                const page = (metadata === null || metadata === void 0 ? void 0 : metadata.nextPage) || 1;
+                // MangaUpdates will return an error for empty search strings
+                if (!search) {
+                    console.log(`${logPrefix} ignoring empty search`);
+                    return createPagedResults({ results: [], metadata: { nextPage: null } });
+                }
+                console.log(`${logPrefix} searching for "${search}" (page=${page})`);
+                const searchResponse = yield this.requestManager.schedule(createRequestObject({
+                    url: `https://www.mangaupdates.com/series.html?search=${encodeURIComponent(search)}&page=${encodeURIComponent(page)}`,
+                    method: 'GET',
+                }), 1);
+                if (searchResponse.status > 299) {
+                    console.log(`${logPrefix} login error (${searchResponse.status}): ${searchResponse.data}`);
+                    throw new Error('Search request failed!');
+                }
+                const results = searchUtils.parseSearchResults(this.cheerio, searchResponse.data);
+                console.log(`${logPrefix} complete`);
+                return results;
+            }
+            catch (e) {
+                console.log(`${logPrefix} error`);
+                console.log(e);
+                throw e;
+            }
         });
     }
     /** TODO */
@@ -537,7 +564,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
         return __awaiter(this, void 0, void 0, function* () {
             const logPrefix = '[login]';
             console.log(`${logPrefix} starts`);
-            if (!session.validateCredentials(credentials)) {
+            if (!sessionUtils.validateCredentials(credentials)) {
                 console.error(`${logPrefix} tried to store invalid mu_credentials: ${JSON.stringify(credentials)}`);
                 throw new Error('Must provide a username and password!');
             }
@@ -550,7 +577,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                     headers: { 'content-type': 'application/x-www-form-urlencoded' },
                     data: `act=login&username=${username}&password=${password}`,
                 }), 0);
-                if (loginResponse.status > 399) {
+                if (loginResponse.status > 299) {
                     console.log(`${logPrefix} login error (${loginResponse.status}): ${loginResponse.data}`);
                     throw new Error('Incorrect username/password!');
                 }
@@ -559,26 +586,25 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                     url: 'https://www.mangaupdates.com/submit.html',
                     method: 'GET',
                 }), 0);
-                if (userProfileResponse.status > 399 ||
-                    !userProfileResponse.data.includes(`Welcome back, ${credentials.username}`)) {
+                if (userProfileResponse.status > 299 || !userProfileResponse.data.includes(`Welcome back, ${credentials.username}`)) {
                     console.log(`${logPrefix} profile check failed (${userProfileResponse.status}): ${userProfileResponse.data}`);
                     throw new Error('Incorrect username/password!');
                 }
-                yield session.setUserCredentials(this.stateManager, credentials);
+                yield sessionUtils.setUserCredentials(this.stateManager, credentials);
             }
             catch (e) {
                 console.log(`${logPrefix} failed to log in`);
                 console.log(e);
                 throw new Error('Login failed!');
             }
-            console.log(`${logPrefix} login complete`);
+            console.log(`${logPrefix} complete`);
         });
     }
     refreshSession() {
         return __awaiter(this, void 0, void 0, function* () {
             const logPrefix = '[refreshSession]';
             console.log(`${logPrefix} starts`);
-            const credentials = yield session.getUserCredentials(this.stateManager);
+            const credentials = yield sessionUtils.getUserCredentials(this.stateManager);
             if (!credentials) {
                 console.log(`${logPrefix} no credentials available, unable to refresh`);
                 throw new Error('Could not find login credentials!');
@@ -591,15 +617,54 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
     logout() {
         return __awaiter(this, void 0, void 0, function* () {
             yield Promise.all([
-                session.clearUserCredentials(this.stateManager),
-                session.clearCookies(this.stateManager),
+                sessionUtils.clearUserCredentials(this.stateManager),
+                sessionUtils.clearCookies(this.stateManager),
             ]);
         });
     }
 }
 exports.MangaUpdates = MangaUpdates;
 
-},{"./utils/mu-session":49,"paperback-extensions-common":4}],49:[function(require,module,exports){
+},{"./utils/mu-search":49,"./utils/mu-session":50,"paperback-extensions-common":4}],49:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.parseSearchResults = void 0;
+const logPrefix = '[mu-search]';
+const SEARCH_RESULT_TILES = '#main_content > .p-2 > .row:first-of-type > .col-lg-6';
+const SEARCH_RESULT_TILE_URL = '.col.text a[alt="Series Info"]';
+const SEARCH_RESULT_TILE_IMAGE = 'img';
+const NEXT_PAGE_LINK = '#main_content > .p-2 > .row:last-of-type > .p-1:first-of-type .justify-content-end a';
+function parseSearchResults($, html) {
+    const results = [];
+    $(SEARCH_RESULT_TILES, html).map((i, tile) => {
+        const urlAnchor = $(SEARCH_RESULT_TILE_URL, tile);
+        const parsedResultUrl = /series\.html\?.*id=(\d+)/.exec(urlAnchor.attr('href') || '');
+        if (!parsedResultUrl) {
+            console.log(`${logPrefix} failed to parse serach result (idx=${i}): ${html}`);
+            throw new Error('Failed to parse search results!');
+        }
+        const id = parsedResultUrl[1] || '';
+        const title = urlAnchor.text();
+        if (!id || !title) {
+            console.log(`${logPrefix} failed to extract serach result values (idx=${i}): ${html}`);
+            throw new Error('Failed to parse search results!');
+        }
+        // if the user isn't logged in, adult results won't have an image
+        const image = $(SEARCH_RESULT_TILE_IMAGE, tile).attr('src') || '';
+        results.push(createMangaTile({
+            id,
+            title: createIconText({ text: title }),
+            image,
+        }));
+    });
+    const nextPageUrl = $(NEXT_PAGE_LINK, html).attr('href') || '';
+    const parsedNextPageUrl = /series\.html\?.*page=(\d+)/.exec(nextPageUrl);
+    const nextPage = parsedNextPageUrl ? Number(parsedNextPageUrl[0]) || null : null;
+    return createPagedResults({ results, metadata: { nextPage } });
+}
+exports.parseSearchResults = parseSearchResults;
+
+},{}],50:[function(require,module,exports){
 "use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
