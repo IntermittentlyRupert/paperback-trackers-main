@@ -530,15 +530,15 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                         }
                     }),
                     createSection({
-                        id: 'trackStatus',
-                        header: 'Manga Status',
+                        id: 'trackList',
+                        header: 'Manga List',
                         footer: 'Warning: Setting this to "None" will delete the listing from MangaUpdates',
                         rows: () => Promise.resolve([
                             createSelect({
-                                id: 'status',
+                                id: 'listName',
                                 value: [status.list === 'None' ? 'Reading List' : status.list],
                                 allowsMultiselect: false,
-                                label: 'Status',
+                                label: 'List',
                                 displayLabel: (value) => value,
                                 options: [
                                     'None',
@@ -557,14 +557,14 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                         header: 'Progress',
                         rows: () => Promise.resolve([
                             createStepper({
-                                id: 'progress',
+                                id: 'chapterProgress',
                                 label: 'Chapter',
                                 value: status.chapterProgress,
                                 min: 0,
                                 step: 1
                             }),
                             createStepper({
-                                id: 'progressVolumes',
+                                id: 'volumeProgress',
                                 label: 'Volume',
                                 value: status.volumeProgress,
                                 min: 0,
@@ -572,34 +572,10 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                             })
                         ])
                     }),
-                    // TODO: ratings
-                    // createSection({
-                    //     id: 'rateSection',
-                    //     header: 'Rating',
-                    //     rows: async () => [
-                    //         createStepper({
-                    //             id: 'score',
-                    //             label: 'Score',
-                    //             value: anilistManga.mediaListEntry?.score ?? 0,
-                    //             min: 0,
-                    //             max: 10,
-                    //             step: 0.1
-                    //         })
-                    //     ]
-                    // })
+                    // TODO: rating
                 ];
             }),
-            onSubmit: (values) => __awaiter(this, void 0, void 0, function* () {
-                // TODO: list updates
-                // TODO: handle custom lists
-                // TO CHANGE LIST:
-                // https://www.mangaupdates.com/ajax/list_update.php?
-                // s=<manga ID>
-                // l=<numeric list ID>
-                // r=1 <--- only if deleting
-                // cache_j=<cache busting random numbers - search page js bundle>
-                // TODO: figure out how to change progress
-            }),
+            onSubmit: (values) => this.handleMangaFormChanges(values),
             validate: () => Promise.resolve(true)
         });
     }
@@ -792,6 +768,88 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
         });
     }
     ////////////////////
+    // List Management
+    ////////////////////
+    handleMangaFormChanges(values) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const logPrefix = '[handleMangaFormChanges]';
+            console.log(`${logPrefix} starts`);
+            // These requests are all idempotent, so it's fairly safe for us to make
+            // them unconditionally. If somebody makes a change via the website
+            // between when they load the form and when they submit it, then I'll
+            // clobber that change, but also don't do silly things like that.
+            //
+            // Since the manga progress request is dependent on the list ID, don't
+            // parallelise the requests in case the list has changed.
+            try {
+                const listId = yield this.getListId(values.listName);
+                yield this.setMangaList({
+                    mangaId: values.mangaId,
+                    listId,
+                });
+                yield this.setMangaProgress({
+                    mangaId: values.mangaId,
+                    listId,
+                    volumeProgress: values.volumeProgress,
+                    chapterProgress: values.chapterProgress,
+                });
+            }
+            catch (e) {
+                console.log(`${logPrefix} failed`);
+                console.log(e);
+                throw e;
+            }
+            console.log(`${logPrefix} complete`);
+        });
+    }
+    setMangaList(params) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const logPrefix = '[setMangaList]';
+            console.log(`${logPrefix} starts: ${JSON.stringify(params)}`);
+            const query = [
+                `s=${encodeURIComponent(params.mangaId)}`,
+                `l=${encodeURIComponent(params.listId)}`,
+                `cache_j=${Math.floor(100000000 * Math.random())},${Math.floor(100000000 * Math.random())},${Math.floor(100000000 * Math.random())}`
+            ];
+            if (params.listId === mangaUtils.STANDARD_LIST_IDs.None) {
+                // deletion flag
+                query.push('r=1');
+            }
+            const response = yield this.requestManager.schedule(createRequestObject({
+                url: `https://www.mangaupdates.com/ajax/list_update.php?${query.join('&')}`,
+                method: 'GET',
+            }), 1);
+            if (response.status > 299) {
+                console.log(`${logPrefix} failed (${response.status}): ${response.data}`);
+                throw new Error('Manga list update failed!');
+            }
+            console.log(`${logPrefix} complete`);
+        });
+    }
+    setMangaProgress(params) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const logPrefix = '[setMangaProgress]';
+            console.log(`${logPrefix} starts: ${JSON.stringify(params)}`);
+            const query = [
+                'ver=2',
+                `lid=${encodeURIComponent(params.listId)}`,
+                `s=${encodeURIComponent(params.mangaId)}`,
+                `set_v=${encodeURIComponent(params.volumeProgress)}`,
+                `set_c=${encodeURIComponent(params.chapterProgress)}`,
+                `cache_j=${Math.floor(100000000 * Math.random())},${Math.floor(100000000 * Math.random())},${Math.floor(100000000 * Math.random())}`
+            ];
+            const response = yield this.requestManager.schedule(createRequestObject({
+                url: `https://www.mangaupdates.com/ajax/chap_update.php?${query.join('&')}`,
+                method: 'GET',
+            }), 1);
+            if (response.status > 299) {
+                console.log(`${logPrefix} failed (${response.status}): ${response.data}`);
+                throw new Error('Manga progress update failed!');
+            }
+            console.log(`${logPrefix} complete`);
+        });
+    }
+    ////////////////////
     // Other Data Fetching
     ////////////////////
     loadMangaPage(mangaId) {
@@ -813,13 +871,24 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             return [];
         });
     }
+    getListId(listName) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const standardListId = mangaUtils.STANDARD_LIST_IDs[listName];
+            if (standardListId) {
+                return standardListId;
+            }
+            // TODO: get custom list IDs
+            console.log(`[getListId] could not find list "${listName}`);
+            throw new Error('Could not find list!');
+        });
+    }
 }
 exports.MangaUpdates = MangaUpdates;
 
 },{"./utils/mu-manga":49,"./utils/mu-search":50,"./utils/mu-session":51,"paperback-extensions-common":4}],49:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getListInfo = exports.getMangaInfo = exports.LIST_NAME = exports.List = void 0;
+exports.getListInfo = exports.getMangaInfo = exports.STANDARD_LIST_IDs = void 0;
 const logPrefix = '[mu-manga]';
 const MANGA_TITLE_MAIN = '#main_content .tabletitle';
 const MANGA_INFO_COLUMNS = '#main_content > .p-2:nth-child(2) > .row > .col-6';
@@ -831,22 +900,13 @@ const IS_HENTAI_GENRE = {
     Hentai: true,
     Smut: true,
 };
-var List;
-(function (List) {
-    List["NONE"] = "-1";
-    List["READING"] = "0";
-    List["WISH"] = "1";
-    List["COMPLETE"] = "2";
-    List["UNFINISHED"] = "3";
-    List["ON_HOLD"] = "4";
-})(List = exports.List || (exports.List = {}));
-exports.LIST_NAME = {
-    [List.NONE]: 'None',
-    [List.READING]: 'Reading',
-    [List.WISH]: 'Wish List',
-    [List.COMPLETE]: 'Complete',
-    [List.UNFINISHED]: 'Unfinished',
-    [List.ON_HOLD]: 'On Hold',
+exports.STANDARD_LIST_IDs = {
+    'None': -1,
+    'Reading List': 0,
+    'Wish List': 1,
+    'Complete List': 2,
+    'Unfinished List': 3,
+    'On Hold List': 4,
 };
 function getSectionContent($, html, title) {
     const columns = $(MANGA_INFO_COLUMNS, html);
