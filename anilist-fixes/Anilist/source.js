@@ -462,7 +462,7 @@ exports.AnilistInfo = {
     author: 'Faizan Durrani',
     contentRating: paperback_extensions_common_1.ContentRating.EVERYONE,
     icon: 'icon.png',
-    version: '1.0.9',
+    version: '1.0.10',
     description: 'Anilist Tracker',
     authorWebsite: 'faizandurrani.github.io',
     websiteBaseURL: 'https://anilist.co'
