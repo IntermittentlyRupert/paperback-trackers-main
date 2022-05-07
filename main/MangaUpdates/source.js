@@ -682,24 +682,44 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
     }
     processActionQueue(actionQueue) {
         return __awaiter(this, void 0, void 0, function* () {
-            const logPrefix = '[getSearchResults]';
+            const logPrefix = '[processActionQueue]';
             console.log(`${logPrefix} starts`);
             const chapterReadActions = yield actionQueue.queuedChapterReadActions();
+            console.log(`${logPrefix} found ${chapterReadActions.length} action(s)`);
             for (const action of chapterReadActions) {
                 const params = {
                     mangaId: action.mangaId,
                     volumeProgress: action.volumeNumber || 1,
                     chapterProgress: action.chapterNumber,
                 };
+                console.log(`${logPrefix} processing action: ${JSON.stringify(params)}`);
+                // If we're tracking the manga but it isn't on any list, then the
+                // progress update will do nothing. Make sure it's on a list.
+                //
+                // Don't bother to fail the entire action if this fails. In most
+                // cases the manga will already be on a list and I'd rather have
+                // the happy-path be more reliable.
                 try {
-                    console.log(`${logPrefix} processing action: ${JSON.stringify(params)}`);
-                    // This will automatically add the manga to the Reading List if
-                    // it's not already in a list.
+                    const html = yield this.loadMangaPage(action.mangaId);
+                    const list = listUtils.getListInfo(this.cheerio, html, action.mangaId);
+                    if (list.listName === listUtils.STANDARD_LIST_NAMES.NONE) {
+                        console.log(`${logPrefix} manga is not in a list - adding to Reading List`);
+                        yield this.setMangaList({
+                            mangaId: action.mangaId,
+                            listId: listUtils.STANDARD_LIST_IDS.READING,
+                        });
+                    }
+                }
+                catch (e) {
+                    console.log(`${logPrefix} list check failed`);
+                    console.log(e);
+                }
+                try {
                     yield this.setMangaProgress(params);
                     yield actionQueue.discardChapterReadAction(action);
                 }
                 catch (e) {
-                    console.log(`${logPrefix} failed`);
+                    console.log(`${logPrefix} progress update failed`);
                     console.log(e);
                     yield actionQueue.retryChapterReadAction(action);
                 }
@@ -803,7 +823,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                         listId: values.listId[0]
                     }),
                 ];
-                if (values.listId[0] !== listUtils.STANDARD_LIST_IDs.None) {
+                if (values.listId[0] !== listUtils.STANDARD_LIST_IDS.NONE) {
                     actions.push(this.setMangaProgress({
                         mangaId: values.mangaId,
                         volumeProgress: values.volumeProgress,
@@ -829,7 +849,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                 `l=${encodeURIComponent(params.listId)}`,
                 `cache_j=${Math.floor(100000000 * Math.random())},${Math.floor(100000000 * Math.random())},${Math.floor(100000000 * Math.random())}`
             ];
-            if (params.listId === listUtils.STANDARD_LIST_IDs.None) {
+            if (params.listId === listUtils.STANDARD_LIST_IDS.NONE) {
                 // deletion flag
                 query.push('r=1');
             }
@@ -886,7 +906,10 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
     }
     getLists() {
         return __awaiter(this, void 0, void 0, function* () {
-            const standardLists = Object.entries(listUtils.STANDARD_LIST_IDs).map(([listName, listId]) => ({ listId, listName }));
+            const standardLists = listUtils.STANDARD_LISTS.map((list) => ({
+                listId: listUtils.STANDARD_LIST_IDS[list],
+                listName: listUtils.STANDARD_LIST_NAMES[list]
+            }));
             const customListsResponse = yield this.requestManager.schedule(createRequestObject({
                 url: 'https://www.mangaupdates.com/mylist.html?act=edit',
                 method: 'GET',
@@ -905,23 +928,39 @@ exports.MangaUpdates = MangaUpdates;
 },{"./utils/mu-lists":49,"./utils/mu-manga":50,"./utils/mu-search":51,"./utils/mu-session":52,"paperback-extensions-common":4}],49:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getCustomLists = exports.getListInfo = exports.STANDARD_LIST_IDs = void 0;
+exports.getCustomLists = exports.getListInfo = exports.STANDARD_LIST_IDS = exports.STANDARD_LIST_NAMES = exports.STANDARD_LISTS = void 0;
 const logPrefix = 'mu-lists';
 const MANGA_LIST_NAME = '#showList > .my-auto u';
 const MANGA_PROGRESS_VOLUMES = '#chap-links a[title="Increment Volume"]';
 const MANGA_PROGRESS_CHAPTERS = '#chap-links a[title="Increment Chapter"]';
 const CUSTOM_LIST_NAMES = '#main_content form:last-child .lrow.col-3 input[type="text"]';
-exports.STANDARD_LIST_IDs = {
-    'None': '-1',
-    'Reading List': '0',
-    'Wish List': '1',
-    'Complete List': '2',
-    'Unfinished List': '3',
-    'On Hold List': '4',
+exports.STANDARD_LISTS = [
+    'NONE',
+    'READING',
+    'WISH',
+    'COMPLETE',
+    'UNFINISHED',
+    'ON_HOLD',
+];
+exports.STANDARD_LIST_NAMES = {
+    NONE: 'None',
+    READING: 'Reading List',
+    WISH: 'Wish List',
+    COMPLETE: 'Complete List',
+    UNFINISHED: 'Unfinished List',
+    ON_HOLD: 'On Hold List',
+};
+exports.STANDARD_LIST_IDS = {
+    NONE: '-1',
+    READING: '0',
+    WISH: '1',
+    COMPLETE: '2',
+    UNFINISHED: '3',
+    ON_HOLD: '4',
 };
 function getListInfo($, html, mangaId) {
     const info = {
-        listName: $(MANGA_LIST_NAME, html).text().trim() || 'None',
+        listName: $(MANGA_LIST_NAME, html).text().trim() || exports.STANDARD_LIST_NAMES.NONE,
         volumeProgress: parseInt($(MANGA_PROGRESS_VOLUMES, html).text().trim().slice(2)) || 0,
         chapterProgress: parseInt($(MANGA_PROGRESS_CHAPTERS, html).text().trim().slice(2)) || 0,
     };
