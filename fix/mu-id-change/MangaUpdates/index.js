@@ -919,15 +919,27 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
     ////////////////////
     loadMangaPage(mangaId) {
         return __awaiter(this, void 0, void 0, function* () {
-            const response = yield this.requestManager.schedule(createRequestObject({
+            const logPrefix = '[loadMangaPage]';
+            let response = yield this.requestManager.schedule(createRequestObject({
                 url: `https://www.mangaupdates.com/series/${encodeURIComponent(mangaId)}`,
                 method: 'GET',
             }), 1);
+            // Handle old-style short numeric IDs.
+            //
+            // Note that we always assume the ID is new-style first. Numeric-only
+            // new-style IDs are rare, but they exist and we can't differentiate
+            // them from old-style IDs. We can't even optimistically try the old
+            // endpoint because it doesn't return a nice friendly 404 status like
+            // the new one. We'd have to actually parse the HTML which isn't worth
+            // it.
             if (response.status === 404 && /^\d+$/.exec(mangaId)) {
-                console.log(`[loadMangaInfo] failed due to probable legacy id: ${mangaId}`);
-                throw new Error('This manga is tracked using an old MangaUpdates ID. Tracking will not work until you un-track and re-track it.');
+                console.log(`${logPrefix} failed due to probable legacy id: ${mangaId}`);
+                response = yield this.requestManager.schedule(createRequestObject({
+                    url: `https://www.mangaupdates.com/series.html?id=${encodeURIComponent(mangaId)}`,
+                    method: 'GET',
+                }), 1);
             }
-            else if (response.status > 299) {
+            if (response.status > 299) {
                 console.log(`[loadMangaInfo] failed (${response.status}): ${response.data}`);
                 throw new Error('Manga request failed!');
             }
