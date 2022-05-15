@@ -480,21 +480,9 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                         this.getLists(),
                         this.loadMangaPage(mangaId),
                     ]);
-                    if (!mangaPage) {
-                        return [
-                            createSection({
-                                id: 'errorInfo',
-                                rows: () => Promise.resolve([
-                                    createLabel({
-                                        id: 'failureMessage',
-                                        label: 'ERROR',
-                                        value: 'This manga is tracked using an old MangaUpdates ID. Tracking will not work until you un-track and re-track it.',
-                                    })
-                                ])
-                            }),
-                        ];
-                    }
-                    const canonicalId = mangaUtils.getCanonicalId(this.cheerio, mangaPage, mangaId);
+                    // We might be tracking the manga using an old (pre-May'22)
+                    // ID. Make sure we're using a new ID.
+                    const mangaCanonicalId = mangaUtils.getIdFromPage(this.cheerio, mangaPage, mangaId);
                     const info = mangaUtils.getMangaInfo(this.cheerio, mangaPage, mangaId);
                     const status = listUtils.getListInfo(this.cheerio, mangaPage, mangaId);
                     const listId = (_b = lists.find(list => list.listName === status.listName)) === null || _b === void 0 ? void 0 : _b.listId;
@@ -503,6 +491,18 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                         throw new Error('Unknown manga list!');
                     }
                     const listNamesById = Object.fromEntries(lists.map(list => [list.listId, list.listName]));
+                    const oldIdWarning = [];
+                    if (mangaId !== mangaCanonicalId) {
+                        oldIdWarning.push(createLabel({
+                            id: 'legacyMangaId',
+                            label: 'Legacy Manga ID',
+                            value: mangaId,
+                        }), createLabel({
+                            id: 'oldIdWarning',
+                            label: 'WARNING',
+                            value: 'This manga is tracked using a legacy MangaUpdates ID. Un-track and re-track this manga to improve tracking performance and reliability!',
+                        }));
+                    }
                     return [
                         createSection({
                             id: 'userInfo',
@@ -525,13 +525,9 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                                     createLabel({
                                         id: 'mangaId',
                                         label: 'Manga ID',
-                                        value: mangaId,
+                                        value: mangaCanonicalId,
                                     }),
-                                    createLabel({
-                                        id: 'mangaCanonicalId',
-                                        label: 'Canonical ID',
-                                        value: canonicalId,
-                                    }),
+                                    ...oldIdWarning,
                                     createLabel({
                                         id: 'mangaTitle',
                                         label: 'Title',
@@ -730,18 +726,20 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                 console.log(`${logPrefix} processing action: ${JSON.stringify({ mangaId, volumeProgress, chapterProgress })}`);
                 try {
                     const html = yield this.loadMangaPage(action.mangaId);
-                    const mangaCanonicalId = mangaUtils.getCanonicalId(this.cheerio, html, action.mangaId);
+                    // We might be tracking the manga using an old (pre-May'22) ID.
+                    // Make sure we're using a new ID.
+                    const mangaCanonicalId = mangaUtils.getIdFromPage(this.cheerio, html, action.mangaId);
                     // If we're tracking the manga but it isn't on any list, then the
                     // progress update will do nothing. Make sure it's on a list.
                     const list = listUtils.getListInfo(this.cheerio, html, action.mangaId);
                     if (list.listName === listUtils.STANDARD_LIST_NAMES.NONE) {
                         console.log(`${logPrefix} manga is not in a list - adding to Reading List`);
                         yield this.setMangaList({
-                            mangaCanonicalId,
+                            mangaId: mangaCanonicalId,
                             listId: listUtils.STANDARD_LIST_IDS.READING,
                         });
                     }
-                    yield this.setMangaProgress({ mangaCanonicalId, volumeProgress, chapterProgress });
+                    yield this.setMangaProgress({ mangaId: mangaCanonicalId, volumeProgress, chapterProgress });
                     yield actionQueue.discardChapterReadAction(action);
                 }
                 catch (e) {
@@ -845,13 +843,13 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             try {
                 const actions = [
                     this.setMangaList({
-                        mangaCanonicalId: values.mangaCanonicalId,
+                        mangaId: values.mangaId,
                         listId: values.listId[0]
                     }),
                 ];
                 if (values.listId[0] !== listUtils.STANDARD_LIST_IDS.NONE) {
                     actions.push(this.setMangaProgress({
-                        mangaCanonicalId: values.mangaCanonicalId,
+                        mangaId: values.mangaId,
                         volumeProgress: values.volumeProgress,
                         chapterProgress: values.chapterProgress,
                     }));
@@ -871,7 +869,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             const logPrefix = '[setMangaList]';
             console.log(`${logPrefix} starts: ${JSON.stringify(params)}`);
             const query = [
-                `s=${encodeURIComponent(params.mangaCanonicalId)}`,
+                `s=${encodeURIComponent(params.mangaId)}`,
                 `l=${encodeURIComponent(params.listId)}`,
                 `cache_j=${Math.floor(100000000 * Math.random())},${Math.floor(100000000 * Math.random())},${Math.floor(100000000 * Math.random())}`
             ];
@@ -896,7 +894,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             console.log(`${logPrefix} starts: ${JSON.stringify(params)}`);
             const query = [
                 'ver=2',
-                `s=${encodeURIComponent(params.mangaCanonicalId)}`,
+                `s=${encodeURIComponent(params.mangaId)}`,
                 `set_v=${encodeURIComponent(params.volumeProgress)}`,
                 `set_c=${encodeURIComponent(params.chapterProgress)}`,
                 `cache_j=${Math.floor(100000000 * Math.random())},${Math.floor(100000000 * Math.random())},${Math.floor(100000000 * Math.random())}`
@@ -919,28 +917,14 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
     ////////////////////
     loadMangaPage(mangaId) {
         return __awaiter(this, void 0, void 0, function* () {
-            const logPrefix = '[loadMangaPage]';
-            let response = yield this.requestManager.schedule(createRequestObject({
-                url: `https://www.mangaupdates.com/series/${encodeURIComponent(mangaId)}`,
+            // Note that we might be tracking the manga using an old (pre-May'22)
+            // ID. Currently those IDs still seem to work here
+            const response = yield this.requestManager.schedule(createRequestObject({
+                url: `https://www.mangaupdates.com/series.html?id=${encodeURIComponent(mangaId)}`,
                 method: 'GET',
             }), 1);
-            // Handle old-style short numeric IDs.
-            //
-            // Note that we always assume the ID is new-style first. Numeric-only
-            // new-style IDs are rare, but they exist and we can't differentiate
-            // them from old-style IDs. We can't even optimistically try the old
-            // endpoint because it doesn't return a nice friendly 404 status like
-            // the new one. We'd have to actually parse the HTML which isn't worth
-            // it.
-            if (response.status === 404 && /^\d+$/.exec(mangaId)) {
-                console.log(`${logPrefix} failed due to probable legacy id: ${mangaId}`);
-                response = yield this.requestManager.schedule(createRequestObject({
-                    url: `https://www.mangaupdates.com/series.html?id=${encodeURIComponent(mangaId)}`,
-                    method: 'GET',
-                }), 1);
-            }
             if (response.status > 299) {
-                console.log(`[loadMangaInfo] failed (${response.status}): ${response.data}`);
+                console.log(`[loadMangaPage] failed (${response.status}): ${response.data}`);
                 throw new Error('Manga request failed!');
             }
             return response.data;
@@ -1030,7 +1014,7 @@ exports.getCustomLists = getCustomLists;
 },{}],50:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getCanonicalId = exports.getMangaInfo = void 0;
+exports.getIdFromPage = exports.getMangaInfo = void 0;
 const logPrefix = '[mu-manga]';
 const MANGA_TITLE_MAIN = '#main_content .tabletitle';
 const MANGA_INFO_COLUMNS = '#main_content > .p-2:nth-child(2) > .row > .col-6';
@@ -1150,25 +1134,25 @@ function getMangaInfo($, html, mangaId) {
     return info;
 }
 exports.getMangaInfo = getMangaInfo;
-function getCanonicalId($, html, mangaId) {
+function getIdFromPage($, html, mangaId) {
     const href = $(MANGA_CATEGORY_VOTE_ANCHOR, html).attr('href');
     if (!href) {
-        throw new Error('unable to find canonical ID');
+        throw new Error('unable to find ID');
     }
     const matches = /\.showCat\((\d+),/.exec(href);
     if (!matches) {
-        throw new Error('unable to parse canonical ID');
+        throw new Error('unable to parse ID');
     }
     const canonicalId = matches[1];
     if (!canonicalId) {
         // should be impossible, but TS thinks the elements of a RegExpExecArray
         // are `string | undefined`
-        throw new Error('empty canonical ID');
+        throw new Error('empty ID');
     }
-    console.log(`${logPrefix} found canonical ID (id=${mangaId}): ${canonicalId}`);
+    console.log(`${logPrefix} found ID (id=${mangaId}): ${canonicalId}`);
     return canonicalId;
 }
-exports.getCanonicalId = getCanonicalId;
+exports.getIdFromPage = getIdFromPage;
 
 },{}],51:[function(require,module,exports){
 "use strict";
@@ -1188,17 +1172,18 @@ function parseSearchResults($, html) {
             console.log(`${logPrefix} failed to parse serach result (idx=${i}): ${html}`);
             throw new Error('Failed to parse search results!');
         }
-        const id = parsedResultUrl[1] || '';
+        const base36Id = parsedResultUrl[1] || '';
+        const id = parseInt(base36Id, 36);
         const title = urlAnchor.text();
-        if (!id || !title) {
+        if (!base36Id || isNaN(id) || !title) {
             console.log(`${logPrefix} failed to extract serach result values (idx=${i}): ${html}`);
             throw new Error('Failed to parse search results!');
         }
         // if the user isn't logged in, adult results won't have an image
         const image = $(SEARCH_RESULT_TILE_IMAGE, tile).attr('src') || '';
-        console.log(`${logPrefix} result ${i}: [${id}] ${title} (${image})`);
+        console.log(`${logPrefix} result ${i}: [${base36Id}->${id}] ${title} (${image})`);
         results.push(createMangaTile({
-            id,
+            id: String(id),
             title: createIconText({ text: title }),
             image,
         }));
