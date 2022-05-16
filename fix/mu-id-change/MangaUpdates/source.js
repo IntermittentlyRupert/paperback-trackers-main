@@ -1018,7 +1018,7 @@ exports.getIdFromPage = exports.getMangaInfo = void 0;
 const logPrefix = '[mu-manga]';
 const MANGA_TITLE_MAIN = '#main_content .tabletitle';
 const MANGA_INFO_COLUMNS = '#main_content > .p-2:nth-child(2) > .row > .col-6';
-const MANGA_CATEGORY_VOTE_ANCHOR = '#cat_opts a';
+const MANGA_HIDDEN_ID_INPUT = 'input[name="id"]';
 const IS_HENTAI_GENRE = {
     Adult: true,
     Hentai: true,
@@ -1135,19 +1135,9 @@ function getMangaInfo($, html, mangaId) {
 }
 exports.getMangaInfo = getMangaInfo;
 function getIdFromPage($, html, mangaId) {
-    const href = $(MANGA_CATEGORY_VOTE_ANCHOR, html).attr('href');
-    if (!href) {
-        throw new Error('unable to find ID');
-    }
-    const matches = /\.showCat\((\d+),/.exec(href);
-    if (!matches) {
-        throw new Error('unable to parse ID');
-    }
-    const canonicalId = matches[1];
+    const canonicalId = $(MANGA_HIDDEN_ID_INPUT, html).attr('value');
     if (!canonicalId) {
-        // should be impossible, but TS thinks the elements of a RegExpExecArray
-        // are `string | undefined`
-        throw new Error('empty ID');
+        throw new Error('unable to find ID');
     }
     console.log(`${logPrefix} found ID (id=${mangaId}): ${canonicalId}`);
     return canonicalId;
