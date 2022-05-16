@@ -1018,7 +1018,7 @@ exports.getIdFromPage = exports.getMangaInfo = void 0;
 const logPrefix = '[mu-manga]';
 const MANGA_TITLE_MAIN = '#main_content .tabletitle';
 const MANGA_INFO_COLUMNS = '#main_content > .p-2:nth-child(2) > .row > .col-6';
-const MANGA_HIDDEN_ID_INPUT = 'input[name="id"]';
+const MANGA_HIDDEN_ID_INPUT = 'form[method="POST"] input[name="id"]';
 const IS_HENTAI_GENRE = {
     Adult: true,
     Hentai: true,
