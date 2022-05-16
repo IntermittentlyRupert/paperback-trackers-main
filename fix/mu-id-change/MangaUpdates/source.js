@@ -1018,7 +1018,7 @@ exports.getIdFromPage = exports.getMangaInfo = void 0;
 const logPrefix = '[mu-manga]';
 const MANGA_TITLE_MAIN = '#main_content .tabletitle';
 const MANGA_INFO_COLUMNS = '#main_content > .p-2:nth-child(2) > .row > .col-6';
-const MANGA_HIDDEN_ID_INPUT = 'form[method="POST"] input[name="id"]';
+const MANGA_CANONICAL_URL = 'link[rel="canonical"]';
 const IS_HENTAI_GENRE = {
     Adult: true,
     Hentai: true,
@@ -1135,12 +1135,21 @@ function getMangaInfo($, html, mangaId) {
 }
 exports.getMangaInfo = getMangaInfo;
 function getIdFromPage($, html, mangaId) {
-    const canonicalId = $(MANGA_HIDDEN_ID_INPUT, html).attr('value');
-    if (!canonicalId) {
-        throw new Error('unable to find ID');
+    const canonicalUrl = $(MANGA_CANONICAL_URL, html).attr('href');
+    if (!canonicalUrl) {
+        throw new Error('unable to find canonical URL');
     }
-    console.log(`${logPrefix} found ID (id=${mangaId}): ${canonicalId}`);
-    return canonicalId;
+    const parsedUrl = /series\/([A-Za-z0-9]+)\//.exec(canonicalUrl);
+    if (!parsedUrl) {
+        throw new Error('unable to parse canonical URL');
+    }
+    const base36Id = parsedUrl[1] || '';
+    const id = parseInt(base36Id, 36);
+    if (!base36Id || isNaN(id)) {
+        throw new Error('invalid canonical ID');
+    }
+    console.log(`${logPrefix} found ID (id=${mangaId}): ${id}`);
+    return String(id);
 }
 exports.getIdFromPage = getIdFromPage;
 
