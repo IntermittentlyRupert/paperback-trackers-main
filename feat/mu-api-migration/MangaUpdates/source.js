@@ -475,24 +475,6 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                         // TODO: get progress info
                         // TODO: get list info
                     ]);
-                    // const [avatarUrl, lists, mangaPage] = await Promise.all([
-                    //     this.getLoggedInUserAvatarUrl(),
-                    //     this.getLists(),
-                    //     this.loadMangaPage(mangaId),
-                    // ])
-                    // // We might be tracking the manga using an old (pre-May'22)
-                    // // ID. Make sure we're using a new ID.
-                    // const mangaCanonicalId = mangaUtils.getIdFromPage(this.cheerio, mangaPage, mangaId)
-                    // const info = mangaUtils.getMangaInfo(this.cheerio, mangaPage, mangaId)
-                    // const status = listUtils.getListInfo(this.cheerio, mangaPage, mangaId)
-                    // const listId = lists.find(list => list.listName === status.listName)?.listId
-                    // if (!listId) {
-                    //     console.log(`[getMangaForm] unable to find list: ${JSON.stringify({ info, status, lists })}}`)
-                    //     throw new Error('Unknown manga list!')
-                    // }
-                    // const listNamesById = Object.fromEntries(
-                    //     lists.map(list => [list.listId, list.listName])
-                    // )
                     const oldIdWarning = [];
                     if (mangaId !== canonicalId) {
                         oldIdWarning.push(createLabel({
