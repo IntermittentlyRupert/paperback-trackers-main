@@ -868,12 +868,12 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             return canonicalId;
         });
     }
-    getMangaInfo(mangaId) {
+    getMangaInfo(canonicalId) {
         return __awaiter(this, void 0, void 0, function* () {
             const logPrefix = '[getMangaInfo]';
-            console.log(`${logPrefix} start: ${mangaId}`);
+            console.log(`${logPrefix} start: ${canonicalId}`);
             const series = yield this.request('/v1/series/{id}', 'GET', {
-                params: { id: mangaId },
+                params: { id: canonicalId },
                 query: {},
             });
             const mangaInfo = mangaUtils.parseMangaInfo(series);
