@@ -467,11 +467,9 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                         ];
                     }
                     const canonicalId = yield this.getCanonicalId(mangaId);
-                    const userProfilePromise = this.request('/v1/account/profile', 'GET', {});
-                    const mangaInfoPromise = this.getMangaInfo(canonicalId);
                     const [userProfile, mangaInfo] = yield Promise.all([
-                        userProfilePromise,
-                        mangaInfoPromise,
+                        this.request('/v1/account/profile', 'GET', {}),
+                        this.getMangaInfo(canonicalId),
                         // TODO: get progress info
                         // TODO: get list info
                     ]);
