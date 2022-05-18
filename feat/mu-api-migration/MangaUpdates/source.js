@@ -415,10 +415,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
     constructor() {
         super(...arguments);
         this.stateManager = createSourceStateManager({});
-        this.requestManager = createRequestManager({
-            requestsPerSecond: 2.5,
-            requestTimeout: 20000,
-        });
+        this.requestManager = createRequestManager({ requestsPerSecond: 5, requestTimeout: 10000 });
     }
     ////////////////////
     // Public API
@@ -556,6 +553,11 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                             header: 'Manga List',
                             footer: 'Warning: Setting this to "None" will delete the listing from MangaUpdates',
                             rows: () => Promise.resolve([
+                                createLabel({
+                                    id: 'isInList',
+                                    value: progressInfo ? 'Yes' : 'No',
+                                    label: 'Tracked on MangaUpdates?',
+                                }),
                                 createSelect({
                                     id: 'listId',
                                     value: [listId],
@@ -837,39 +839,53 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
     ////////////////////
     // List Management
     ////////////////////
-    // TODO: reimplement handleMangaFormChanges and add rating changes
     handleMangaFormChanges(values) {
         return __awaiter(this, void 0, void 0, function* () {
             const logPrefix = '[handleMangaFormChanges]';
             console.log(`${logPrefix} starts: ${JSON.stringify(values)}`);
-            // These requests are all idempotent, so it's fairly safe for us to make
-            // them unconditionally. If somebody makes a change via the website
-            // between when they load the form and when they submit it, then I'll
-            // clobber that change, but also don't do silly things like that.
             try {
-                // const actions: Promise<void>[] = [
-                //     this.setMangaList({
-                //         mangaId: values.mangaId,
-                //         listId: values.listId[0]
-                //     })
-                // ]
-                // if (values.listId[0] !== listUtils.STANDARD_LIST_IDS.NONE) {
-                //     actions.push(
-                //         this.setMangaProgress({
-                //             mangaId: values.mangaId,
-                //             volumeProgress: values.volumeProgress,
-                //             chapterProgress: values.chapterProgress,
-                //         }),
-                //     )
-                // }
-                // await Promise.all(actions)
+                const numericId = parseInt(values.mangaId);
+                const isInList = values.isInList === 'Yes';
+                const shouldDelete = values.listId[0] === '-1';
+                const actions = [];
+                if (shouldDelete) {
+                    console.log(`${logPrefix} deleting from list`);
+                    actions.push(this.request('/v1/lists/series/delete', 'POST', {
+                        body: [numericId]
+                    }));
+                }
+                else {
+                    console.log(`${logPrefix} updating in list`);
+                    actions.push(this.request(isInList ? '/v1/lists/series/update' : '/v1/lists/series', 'POST', {
+                        body: [{
+                                series: { id: numericId },
+                                list_id: parseInt(values.listId[0]),
+                                status: {
+                                    volume: values.volumeProgress,
+                                    chapter: values.chapterProgress,
+                                }
+                            }]
+                    }));
+                }
+                if (values.userRating > 0) {
+                    actions.push(this.request('/v1/series/{id}/rating', 'PUT', {
+                        params: { id: numericId },
+                        body: { rating: values.userRating }
+                    }));
+                }
+                else {
+                    actions.push(this.request('/v1/series/{id}/rating', 'DELETE', {
+                        params: { id: numericId }
+                    }));
+                }
+                yield Promise.all(actions);
+                console.log(`${logPrefix} complete`);
             }
             catch (e) {
                 console.log(`${logPrefix} failed`);
                 console.log(e);
                 throw e;
             }
-            console.log(`${logPrefix} complete`);
         });
     }
     ////////////////////
