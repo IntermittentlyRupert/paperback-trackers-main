@@ -575,10 +575,10 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                                 createStepper({
                                     id: 'userRating',
                                     label: 'My Rating',
-                                    value: userRating,
+                                    value: Math.round(userRating),
                                     min: 0,
                                     max: 10,
-                                    step: 0.1
+                                    step: 1
                                 }),
                             ])
                         }),
@@ -773,13 +773,14 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                 const result = yield this.request('/v1/account/login', 'PUT', {
                     body: credentials
                 });
-                if (!((_a = result.context) === null || _a === void 0 ? void 0 : _a.session_token)) {
+                const sessionToken = (_a = result.context) === null || _a === void 0 ? void 0 : _a.session_token;
+                if (!sessionToken) {
                     console.log(`${logPrefix} no session token on response: ${JSON.stringify(result)}`);
                     throw new Error('no session token on response');
                 }
                 yield Promise.all([
                     (0, mu_session_1.setUserCredentials)(this.stateManager, credentials),
-                    (0, mu_session_1.setSessionToken)(this.stateManager, result.context.session_token)
+                    (0, mu_session_1.setSessionToken)(this.stateManager, sessionToken)
                 ]);
                 console.log(`${logPrefix} complete`);
             }
@@ -825,13 +826,14 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
     getCanonicalId(mangaId) {
         return __awaiter(this, void 0, void 0, function* () {
             const logPrefix = '[getCanonicalId]';
-            // The shortest new ID I could find was 8 decimal digits
+            // The shortest new ID I could find was 8 decimal digits, but all old
+            // IDs are definitely <=6 decimal digits.
             if (mangaId.length > 6) {
                 return mangaId;
             }
             console.log(`${logPrefix} legacy ID detected: ${mangaId}`);
             const response = yield this.requestManager.schedule(createRequestObject({
-                url: `https://api.mangaupdates.com/series.html?id=${mangaId}`,
+                url: `https://www.mangaupdates.com/series.html?id=${mangaId}`,
                 method: 'GET',
             }), 1);
             if (response.status > 299) {
@@ -927,11 +929,33 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             };
         });
     }
+    ////////////////////
+    // API Request
+    ////////////////////
+    getAuthHeader() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const existingSessionToken = yield (0, mu_session_1.getSessionToken)(this.stateManager);
+            if (existingSessionToken) {
+                return `Bearer ${existingSessionToken}`;
+            }
+            // If this is the user's first request after upgrading to v2 they may
+            // have credentials but no API session token.
+            const credentials = yield (0, mu_session_1.getUserCredentials)(this.stateManager);
+            if (credentials) {
+                yield this.login(credentials);
+                const newSessionToken = yield (0, mu_session_1.getSessionToken)(this.stateManager);
+                if (newSessionToken) {
+                    return `Bearer ${newSessionToken}`;
+                }
+            }
+            throw new Error('You must be logged in!');
+        });
+    }
     /** Will **reject** if the response has a non-2xx status. */
     request(endpoint, verb, request, failOnErrorStatus = true, retryCount = 1) {
         return __awaiter(this, void 0, void 0, function* () {
-            const logPrefix = '[request]';
-            console.log(`${logPrefix} starts: ${verb} ${endpoint} ${JSON.stringify(request)} (retryCount=${retryCount})`);
+            const logPrefix = `[request]  ${verb} ${endpoint}`;
+            console.log(`${logPrefix} starts: ${JSON.stringify(request)} (retryCount=${retryCount})`);
             const baseRequest = request;
             const path = Object.entries(baseRequest.params || {})
                 .filter((entry) => entry[1] != undefined)
@@ -947,26 +971,31 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                 .filter((entry) => entry[1] != undefined)
                 .map(([name, value]) => `${name}=${encodeURIComponent(String(value))}`)
                 .join('&');
-            const headers = {};
-            if (endpoint !== '/v1/account/login') {
-                const sessionToken = yield (0, mu_session_1.getSessionToken)(this.stateManager);
-                if (!sessionToken) {
-                    throw new Error('You must be logged in!');
-                }
-                headers.authorization = `Bearer ${sessionToken}`;
+            const headers = {
+                'accept': 'application/json'
+            };
+            if (baseRequest.body) {
+                headers['content-type'] = 'application/json';
             }
+            if (endpoint !== '/v1/account/login') {
+                headers.authorization = yield this.getAuthHeader();
+            }
+            const start = Date.now();
             const response = yield this.requestManager.schedule(createRequestObject({
                 url: `https://api.mangaupdates.com${path}`,
                 method: verb,
                 param: query,
-                data: baseRequest.body,
+                data: baseRequest.body ? JSON.stringify(baseRequest.body) : undefined,
                 headers
             }), retryCount);
+            const duration = Date.now() - start;
+            console.log(`${logPrefix} response:  (HTTP ${response.status}, ${duration}ms): ${verb} ${endpoint} ${response.data ? JSON.stringify(response.data) : '<empty>'}`);
             const ok = response.status >= 200 && response.status < 300;
             if (failOnErrorStatus && !ok) {
-                console.log(`${logPrefix} failed (${response.status}): ${response.data}`);
+                console.log(`${logPrefix} failed`);
                 throw new Error('Request failed!');
             }
+            console.log(`${logPrefix} complete`);
             return ok ? JSON.parse(response.data) : undefined;
         });
     }
