@@ -364,29 +364,6 @@ __exportStar(require("./SearchFilter"), exports);
 
 },{"./Chapter":5,"./ChapterDetails":6,"./Constants":7,"./DynamicUI":23,"./HomeSection":24,"./Languages":25,"./Manga":26,"./MangaTile":27,"./MangaUpdate":28,"./PagedResults":29,"./RawData":30,"./RequestHeaders":31,"./RequestInterceptor":32,"./RequestManager":33,"./RequestObject":34,"./ResponseObject":35,"./SearchField":36,"./SearchFilter":37,"./SearchRequest":38,"./SourceInfo":39,"./SourceManga":40,"./SourceStateManager":41,"./SourceTag":42,"./TagSection":43,"./TrackedManga":44,"./TrackedMangaChapterReadAction":45,"./TrackerActionQueue":46}],48:[function(require,module,exports){
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -399,9 +376,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MangaUpdates = exports.MangaUpdatesInfo = void 0;
 const paperback_extensions_common_1 = require("paperback-extensions-common");
-const sessionUtils = __importStar(require("./utils/mu-session"));
-const mangaUtils = __importStar(require("./utils/mu-manga"));
+const mu_session_1 = require("./utils/mu-session");
+const mu_manga_1 = require("./utils/mu-manga");
+const mu_search_1 = require("./utils/mu-search");
 const FALLBACK_PROFILE_IMAGE = 'https://cdn.mangaupdates.com/avatar/a0.gif';
+const DEFAULT_LIST_ID = 0; // Reading List
 exports.MangaUpdatesInfo = {
     name: 'MangaUpdates',
     author: 'IntermittentlyRupert',
@@ -446,7 +425,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             sections: () => __awaiter(this, void 0, void 0, function* () {
                 var _a, _b, _c, _d, _e, _f, _g;
                 try {
-                    const username = (_a = (yield sessionUtils.getUserCredentials(this.stateManager))) === null || _a === void 0 ? void 0 : _a.username;
+                    const username = (_a = (yield (0, mu_session_1.getUserCredentials)(this.stateManager))) === null || _a === void 0 ? void 0 : _a.username;
                     if (!username) {
                         return [
                             createSection({
@@ -633,7 +612,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                 header: 'Source Menu',
                 rows: () => __awaiter(this, void 0, void 0, function* () {
                     var _a;
-                    const username = (_a = (yield sessionUtils.getUserCredentials(this.stateManager))) === null || _a === void 0 ? void 0 : _a.username;
+                    const username = (_a = (yield (0, mu_session_1.getUserCredentials)(this.stateManager))) === null || _a === void 0 ? void 0 : _a.username;
                     if (username) {
                         return [
                             createLabel({
@@ -698,35 +677,38 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             });
         });
     }
-    // TODO: reimplement getSearchResults
     getSearchResults(query, metadata) {
+        var _a, _b;
         return __awaiter(this, void 0, void 0, function* () {
             const logPrefix = '[getSearchResults]';
             console.log(`${logPrefix} starts`);
             try {
                 const search = query.title || '';
-                const page = (metadata === null || metadata === void 0 ? void 0 : metadata.nextPage) || 1;
+                const page = (_a = metadata === null || metadata === void 0 ? void 0 : metadata.nextPage) !== null && _a !== void 0 ? _a : 1;
+                const perpage = 25;
                 // MangaUpdates will return an error for empty search strings
-                if (!search) {
-                    console.log(`${logPrefix} ignoring empty search`);
-                    return createPagedResults({ results: [], metadata: { nextPage: null } });
+                if (!search || page < 1) {
+                    console.log(`${logPrefix} no need to search: ${JSON.stringify({ search, page })}`);
+                    return createPagedResults({ results: [], metadata: { nextPage: -1 } });
                 }
                 console.log(`${logPrefix} searching for "${search}" (page=${page})`);
-                // const response = await this.requestManager.schedule(
-                //     createRequestObject({
-                //         url: `https://www.mangaupdates.com/series.html?search=${encodeURIComponent(search)}&page=${encodeURIComponent(page)}`,
-                //         method: 'GET',
-                //     }),
-                //     1
-                // )
-                // if (response.status > 299) {
-                //     console.log(`${logPrefix} failed (${response.status}): ${response.data}`)
-                //     throw new Error('Search request failed!')
-                // }
-                // const results = searchUtils.parseSearchResults(this.cheerio, response.data)
-                const results = createPagedResults({ results: [], metadata: { nextPage: null } });
+                const response = yield this.request('/v1/series/search', 'POST', {
+                    body: {
+                        search,
+                        page,
+                        perpage
+                    }
+                });
+                const results = (0, mu_search_1.parseSearchResults)(response.results || []);
+                const hasNextPage = page * perpage < ((_b = response.total_hits) !== null && _b !== void 0 ? _b : 0);
+                const nextPage = hasNextPage ? page + 1 : -1;
+                console.log(`${logPrefix} got results: ${JSON.stringify({ results, nextPage })}`);
+                const pagedResults = createPagedResults({
+                    results: results.map(result => createMangaTile(Object.assign(Object.assign({}, result), { title: createIconText({ text: result.title }) }))),
+                    metadata: { nextPage }
+                });
                 console.log(`${logPrefix} complete`);
-                return results;
+                return pagedResults;
             }
             catch (e) {
                 console.log(`${logPrefix} error`);
@@ -735,40 +717,41 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             }
         });
     }
-    // TODO: reimplement processActionQueue
     processActionQueue(actionQueue) {
         return __awaiter(this, void 0, void 0, function* () {
             const logPrefix = '[processActionQueue]';
             console.log(`${logPrefix} starts`);
             const chapterReadActions = yield actionQueue.queuedChapterReadActions();
             console.log(`${logPrefix} found ${chapterReadActions.length} action(s)`);
-            for (const action of chapterReadActions) {
-                const mangaId = action.mangaId;
-                const volumeProgress = Math.floor(action.volumeNumber) || 1;
-                const chapterProgress = Math.floor(action.chapterNumber);
-                console.log(`${logPrefix} processing action: ${JSON.stringify({ mangaId, volumeProgress, chapterProgress })}`);
+            const operations = yield Promise.all(chapterReadActions.map(action => this.parseAction(action)));
+            // Apply the operations in bulk (MU has a ~5 second rate limit for these APIs)
+            // TODO: confirm the rate-limit is per-API and not for all mutation operations
+            const listUpdates = operations.filter(operation => operation.isUpdate);
+            if (listUpdates.length > 0) {
                 try {
-                    // const html = await this.loadMangaPage(action.mangaId)
-                    // // We might be tracking the manga using an old (pre-May'22) ID.
-                    // // Make sure we're using a new ID.
-                    // const mangaCanonicalId = mangaUtils.getIdFromPage(this.cheerio, html)
-                    // // If we're tracking the manga but it isn't on any list, then the
-                    // // progress update will do nothing. Make sure it's on a list.
-                    // const list = listUtils.getListInfo(this.cheerio, html, action.mangaId)
-                    // if (list.listName === listUtils.STANDARD_LIST_NAMES.NONE) {
-                    //     console.log(`${logPrefix} manga is not in a list - adding to Reading List`)
-                    //     await this.setMangaList({
-                    //         mangaId: mangaCanonicalId,
-                    //         listId: listUtils.STANDARD_LIST_IDS.READING,
-                    //     })
-                    // }
-                    // await this.setMangaProgress({ mangaId: mangaCanonicalId, volumeProgress, chapterProgress })
-                    yield actionQueue.discardChapterReadAction(action);
+                    const updateBody = listUpdates.map(({ payload }) => payload);
+                    console.log(`${logPrefix} applying list updates: ${JSON.stringify(updateBody)}`);
+                    yield this.request('/v1/lists/series/update', 'POST', { body: updateBody });
+                    yield Promise.all(listUpdates.map(({ action }) => actionQueue.discardChapterReadAction(action)));
                 }
                 catch (e) {
-                    console.log(`${logPrefix} progress update failed`);
+                    console.log(`${logPrefix} list updates failed`);
                     console.log(e);
-                    yield actionQueue.retryChapterReadAction(action);
+                    yield Promise.all(listUpdates.map(({ action }) => actionQueue.retryChapterReadAction(action)));
+                }
+            }
+            const listAdditions = operations.filter(operation => !operation.isUpdate);
+            if (listAdditions.length > 0) {
+                try {
+                    const additionBody = listAdditions.map(({ payload }) => payload);
+                    console.log(`${logPrefix} applying list additions: ${JSON.stringify(additionBody)}`);
+                    yield this.request('/v1/lists/series', 'POST', { body: additionBody });
+                    yield Promise.all(listAdditions.map(({ action }) => actionQueue.discardChapterReadAction(action)));
+                }
+                catch (e) {
+                    console.log(`${logPrefix} list additions failed`);
+                    console.log(e);
+                    yield Promise.all(listAdditions.map(({ action }) => actionQueue.retryChapterReadAction(action)));
                 }
             }
             console.log(`${logPrefix} complete`);
@@ -782,7 +765,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
         return __awaiter(this, void 0, void 0, function* () {
             const logPrefix = '[login]';
             console.log(`${logPrefix} starts`);
-            if (!sessionUtils.validateCredentials(credentials)) {
+            if (!(0, mu_session_1.validateCredentials)(credentials)) {
                 console.error(`${logPrefix} login called with invalid credentials: ${JSON.stringify(credentials)}`);
                 throw new Error('Must provide a username and password!');
             }
@@ -795,8 +778,8 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                     throw new Error('no session token on response');
                 }
                 yield Promise.all([
-                    sessionUtils.setUserCredentials(this.stateManager, credentials),
-                    sessionUtils.setSessionToken(this.stateManager, result.context.session_token)
+                    (0, mu_session_1.setUserCredentials)(this.stateManager, credentials),
+                    (0, mu_session_1.setSessionToken)(this.stateManager, result.context.session_token)
                 ]);
                 console.log(`${logPrefix} complete`);
             }
@@ -811,7 +794,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
         return __awaiter(this, void 0, void 0, function* () {
             const logPrefix = '[refreshSession]';
             console.log(`${logPrefix} starts`);
-            const credentials = yield sessionUtils.getUserCredentials(this.stateManager);
+            const credentials = yield (0, mu_session_1.getUserCredentials)(this.stateManager);
             if (!credentials) {
                 console.log(`${logPrefix} no credentials available, unable to refresh`);
                 throw new Error('Could not find login credentials!');
@@ -831,14 +814,48 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                 console.log(e);
             }
             yield Promise.all([
-                sessionUtils.clearUserCredentials(this.stateManager),
-                sessionUtils.clearSessionToken(this.stateManager),
+                (0, mu_session_1.clearUserCredentials)(this.stateManager),
+                (0, mu_session_1.clearSessionToken)(this.stateManager),
             ]);
         });
     }
     ////////////////////
-    // List Management
+    // Request Handlers
     ////////////////////
+    getCanonicalId(mangaId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const logPrefix = '[getCanonicalId]';
+            // The shortest new ID I could find was 8 decimal digits
+            if (mangaId.length > 6) {
+                return mangaId;
+            }
+            console.log(`${logPrefix} legacy ID detected: ${mangaId}`);
+            const response = yield this.requestManager.schedule(createRequestObject({
+                url: `https://api.mangaupdates.com/series.html?id=${mangaId}`,
+                method: 'GET',
+            }), 1);
+            if (response.status > 299) {
+                console.log(`[${logPrefix}] failed to load page (${response.status}): ${response.data}`);
+                throw new Error('failed to load canonical ID for ${mangaId}');
+            }
+            const canonicalId = (0, mu_manga_1.getIdFromPage)(this.cheerio, response.data);
+            console.log(`${logPrefix} mapped to canonical ID: ${mangaId} --> ${canonicalId}`);
+            return canonicalId;
+        });
+    }
+    getMangaInfo(canonicalId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const logPrefix = '[getMangaInfo]';
+            console.log(`${logPrefix} start: ${canonicalId}`);
+            const series = yield this.request('/v1/series/{id}', 'GET', {
+                params: { id: canonicalId },
+                query: {},
+            });
+            const mangaInfo = (0, mu_manga_1.parseMangaInfo)(series);
+            console.log(`${logPrefix} complete: ${JSON.stringify(mangaInfo)}`);
+            return mangaInfo;
+        });
+    }
     handleMangaFormChanges(values) {
         return __awaiter(this, void 0, void 0, function* () {
             const logPrefix = '[handleMangaFormChanges]';
@@ -869,13 +886,13 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                 }
                 if (values.userRating > 0) {
                     actions.push(this.request('/v1/series/{id}/rating', 'PUT', {
-                        params: { id: numericId },
+                        params: { id: values.mangaId },
                         body: { rating: values.userRating }
                     }));
                 }
                 else {
                     actions.push(this.request('/v1/series/{id}/rating', 'DELETE', {
-                        params: { id: numericId }
+                        params: { id: values.mangaId }
                     }));
                 }
                 yield Promise.all(actions);
@@ -888,41 +905,26 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             }
         });
     }
-    ////////////////////
-    // Request Handlers
-    ////////////////////
-    getCanonicalId(mangaId) {
+    parseAction(action) {
+        var _a;
         return __awaiter(this, void 0, void 0, function* () {
-            const logPrefix = '[getCanonicalId]';
-            // The shortest new ID I could find was 8 decimal digits
-            if (mangaId.length > 6) {
-                return mangaId;
-            }
-            console.log(`${logPrefix} legacy ID detected: ${mangaId}`);
-            const response = yield this.requestManager.schedule(createRequestObject({
-                url: `https://api.mangaupdates.com/series.html?id=${mangaId}`,
-                method: 'GET',
-            }), 1);
-            if (response.status > 299) {
-                console.log(`[${logPrefix}] failed to load page (${response.status}): ${response.data}`);
-                throw new Error('failed to load canonical ID for ${mangaId}');
-            }
-            const canonicalId = mangaUtils.getIdFromPage(this.cheerio, response.data);
-            console.log(`${logPrefix} mapped to canonical ID: ${mangaId} --> ${canonicalId}`);
-            return canonicalId;
-        });
-    }
-    getMangaInfo(canonicalId) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const logPrefix = '[getMangaInfo]';
-            console.log(`${logPrefix} start: ${canonicalId}`);
-            const series = yield this.request('/v1/series/{id}', 'GET', {
-                params: { id: canonicalId },
-                query: {},
-            });
-            const mangaInfo = mangaUtils.parseMangaInfo(series);
-            console.log(`${logPrefix} complete: ${JSON.stringify(mangaInfo)}`);
-            return mangaInfo;
+            const canonicalId = yield this.getCanonicalId(action.mangaId);
+            const listInfo = yield this.request('/v1/lists/series/{seriesId}', 'GET', {
+                params: { seriesId: canonicalId },
+                query: {}
+            }, false);
+            return {
+                action,
+                isUpdate: !!listInfo,
+                payload: {
+                    series: { id: parseInt(canonicalId) },
+                    list_id: (_a = listInfo === null || listInfo === void 0 ? void 0 : listInfo.list_id) !== null && _a !== void 0 ? _a : DEFAULT_LIST_ID,
+                    status: {
+                        volume: Math.floor(action.volumeNumber) || 1,
+                        chapter: Math.floor(action.chapterNumber) || 1,
+                    }
+                }
+            };
         });
     }
     /** Will **reject** if the response has a non-2xx status. */
@@ -947,7 +949,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                 .join('&');
             const headers = {};
             if (endpoint !== '/v1/account/login') {
-                const sessionToken = yield sessionUtils.getSessionToken(this.stateManager);
+                const sessionToken = yield (0, mu_session_1.getSessionToken)(this.stateManager);
                 if (!sessionToken) {
                     throw new Error('You must be logged in!');
                 }
@@ -971,7 +973,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
 }
 exports.MangaUpdates = MangaUpdates;
 
-},{"./utils/mu-manga":49,"./utils/mu-session":50,"paperback-extensions-common":4}],49:[function(require,module,exports){
+},{"./utils/mu-manga":49,"./utils/mu-search":50,"./utils/mu-session":51,"paperback-extensions-common":4}],49:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getIdFromPage = exports.parseMangaInfo = void 0;
@@ -1056,6 +1058,15 @@ function getIdFromPage($, html) {
 exports.getIdFromPage = getIdFromPage;
 
 },{}],50:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.parseSearchResults = void 0;
+function parseSearchResults(results) {
+    return [];
+}
+exports.parseSearchResults = parseSearchResults;
+
+},{}],51:[function(require,module,exports){
 "use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
