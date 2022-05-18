@@ -2658,7 +2658,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                                 label: 'Logout',
                                 value: undefined,
                                 onTap: () => this.logout(),
-                            }),
+                            })
                         ];
                     }
                     return [
@@ -2987,7 +2987,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             const logPrefix = `[request] ${verb} ${endpoint}`;
             const isLogin = endpoint === '/v1/account/login';
             const baseRequest = request;
-            console.log(`${logPrefix} starts: ${JSON.stringify((0, mu_session_1.censorRequestForLogging)(baseRequest))} (failOnErrorStatus=${failOnErrorStatus}, retryCount=${retryCount})`);
+            console.log(`${logPrefix} starts (failOnErrorStatus=${failOnErrorStatus}, retryCount=${retryCount}): ${(0, mu_session_1.loggableRequest)(baseRequest)}`);
             const path = Object.entries(baseRequest.params || {})
                 .filter((entry) => entry[1] != undefined)
                 .map(([name, value]) => [`{${name}}`, String(value)])
@@ -3020,14 +3020,15 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
                 headers
             }), retryCount);
             const duration = Date.now() - start;
-            console.log(`${logPrefix} response:  (HTTP ${response.status}, ${duration}ms): ${verb} ${endpoint} ${response.data ? JSON.stringify(response.data) : '<empty>'}`);
+            const responseBody = response.data ? JSON.parse(response.data) : undefined;
+            console.log(`${logPrefix} response: (HTTP ${response.status}, ${duration}ms): ${(0, mu_session_1.loggableResponse)(responseBody)}`);
             const ok = response.status >= 200 && response.status < 300;
             if (failOnErrorStatus && !ok) {
                 console.log(`${logPrefix} failed`);
                 throw new Error('Request failed!');
             }
             console.log(`${logPrefix} complete`);
-            return ok ? JSON.parse(response.data) : undefined;
+            return responseBody;
         });
     }
 }
@@ -3151,7 +3152,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.censorRequestForLogging = exports.getLoginTime = exports.clearSessionToken = exports.setSessionToken = exports.getSessionToken = exports.clearUserCredentials = exports.setUserCredentials = exports.getUserCredentials = exports.validateCredentials = void 0;
+exports.loggableResponse = exports.loggableRequest = exports.getLoginTime = exports.clearSessionToken = exports.setSessionToken = exports.getSessionToken = exports.clearUserCredentials = exports.setUserCredentials = exports.getUserCredentials = exports.validateCredentials = void 0;
 const logPrefix = '[mu-session]';
 const STATE_MU_CREDENTIALS = 'mu_credentials';
 const STATE_MU_SESSION = 'mu_sessiontoken';
@@ -3237,17 +3238,34 @@ function getLoginTime(sessionToken) {
     }
 }
 exports.getLoginTime = getLoginTime;
-function censorRequestForLogging(request) {
-    var _a;
+function loggableRequest(request) {
+    var _a, _b;
     let censoredRequest = request;
-    // Currently the only sensitive request field in the API is the user's
-    // password in the request body of the login/register/reset password routes.
+    // e.g. on login, register, change password
     if ((_a = censoredRequest.body) === null || _a === void 0 ? void 0 : _a.password) {
         censoredRequest = Object.assign(Object.assign({}, request), { body: Object.assign(Object.assign({}, request.body), { password: '***' }) });
     }
-    return censoredRequest;
+    // e.g. on confirm registration, change password, delete account
+    if ((_b = censoredRequest.params) === null || _b === void 0 ? void 0 : _b.authHash) {
+        censoredRequest = Object.assign(Object.assign({}, censoredRequest), { params: Object.assign(Object.assign({}, censoredRequest.params), { authHash: '***' }) });
+    }
+    return JSON.stringify(censoredRequest);
 }
-exports.censorRequestForLogging = censorRequestForLogging;
+exports.loggableRequest = loggableRequest;
+// eslint-disable-next-line
+function loggableResponse(response) {
+    var _a;
+    if (!response) {
+        return '<empty>';
+    }
+    let censoredResponse = response;
+    // e.g. on login
+    if ((_a = censoredResponse.context) === null || _a === void 0 ? void 0 : _a.session_token) {
+        censoredResponse = Object.assign(Object.assign({}, censoredResponse), { context: Object.assign(Object.assign({}, censoredResponse.context), { session_token: '***' }) });
+    }
+    return JSON.stringify(censoredResponse);
+}
+exports.loggableResponse = loggableResponse;
 
 }).call(this)}).call(this,require("buffer").Buffer)
 },{"buffer":2}]},{},[51])(51)
