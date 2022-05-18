@@ -2751,8 +2751,11 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             const chapterReadActions = yield actionQueue.queuedChapterReadActions();
             console.log(`${logPrefix} found ${chapterReadActions.length} action(s)`);
             const operations = yield Promise.all(chapterReadActions.map(action => this.parseAction(action)));
-            // Apply the operations in bulk (MU has a ~5 second rate limit for these APIs)
-            // TODO: confirm the rate-limit is per-API and not for all mutation operations
+            // Apply the operations in bulk (MU has a ~5 second rate limit for these
+            // APIs).
+            //
+            // There will almost always be 0 or 1 queued action so I'm not super
+            // fussed about maximally parallelising this.
             const listUpdates = operations.filter(operation => operation.isUpdate);
             if (listUpdates.length > 0) {
                 try {
@@ -2981,9 +2984,10 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
     /** Will **reject** if the response has a non-2xx status. */
     request(endpoint, verb, request, failOnErrorStatus = true, retryCount = 1) {
         return __awaiter(this, void 0, void 0, function* () {
-            const logPrefix = `[request]  ${verb} ${endpoint}`;
-            console.log(`${logPrefix} starts: ${JSON.stringify(request)} (retryCount=${retryCount})`);
+            const logPrefix = `[request] ${verb} ${endpoint}`;
+            const isLogin = endpoint === '/v1/account/login';
             const baseRequest = request;
+            console.log(`${logPrefix} starts: ${JSON.stringify((0, mu_session_1.censorRequestForLogging)(baseRequest))} (failOnErrorStatus=${failOnErrorStatus}, retryCount=${retryCount})`);
             const path = Object.entries(baseRequest.params || {})
                 .filter((entry) => entry[1] != undefined)
                 .map(([name, value]) => [`{${name}}`, String(value)])
@@ -3004,7 +3008,7 @@ class MangaUpdates extends paperback_extensions_common_1.Tracker {
             if (baseRequest.body) {
                 headers['content-type'] = 'application/json';
             }
-            if (endpoint !== '/v1/account/login') {
+            if (!isLogin) {
                 headers.authorization = yield this.getAuthHeader();
             }
             const start = Date.now();
@@ -3147,7 +3151,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getLoginTime = exports.clearSessionToken = exports.setSessionToken = exports.getSessionToken = exports.clearUserCredentials = exports.setUserCredentials = exports.getUserCredentials = exports.validateCredentials = void 0;
+exports.censorRequestForLogging = exports.getLoginTime = exports.clearSessionToken = exports.setSessionToken = exports.getSessionToken = exports.clearUserCredentials = exports.setUserCredentials = exports.getUserCredentials = exports.validateCredentials = void 0;
 const logPrefix = '[mu-session]';
 const STATE_MU_CREDENTIALS = 'mu_credentials';
 const STATE_MU_SESSION = 'mu_sessiontoken';
@@ -3233,6 +3237,17 @@ function getLoginTime(sessionToken) {
     }
 }
 exports.getLoginTime = getLoginTime;
+function censorRequestForLogging(request) {
+    var _a;
+    let censoredRequest = request;
+    // Currently the only sensitive request field in the API is the user's
+    // password in the request body of the login/register/reset password routes.
+    if ((_a = censoredRequest.body) === null || _a === void 0 ? void 0 : _a.password) {
+        censoredRequest = Object.assign(Object.assign({}, request), { body: Object.assign(Object.assign({}, request.body), { password: '***' }) });
+    }
+    return censoredRequest;
+}
+exports.censorRequestForLogging = censorRequestForLogging;
 
 }).call(this)}).call(this,require("buffer").Buffer)
 },{"buffer":2}]},{},[51])(51)
