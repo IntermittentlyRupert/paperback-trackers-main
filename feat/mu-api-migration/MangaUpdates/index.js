@@ -1062,7 +1062,19 @@ exports.getIdFromPage = getIdFromPage;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseSearchResults = void 0;
 function parseSearchResults(results) {
-    return [];
+    return results
+        .map(result => {
+        var _a, _b, _c, _d, _e;
+        const id = (_a = result.record) === null || _a === void 0 ? void 0 : _a.series_id;
+        const title = result.hit_title;
+        const image = (_e = (_d = (_c = (_b = result.record) === null || _b === void 0 ? void 0 : _b.image) === null || _c === void 0 ? void 0 : _c.url) === null || _d === void 0 ? void 0 : _d.original) !== null && _e !== void 0 ? _e : '';
+        if (!id || !title) {
+            console.log(`[parseSearchResults] ignoring invalid search result: ${JSON.stringify(result)}`);
+            return null;
+        }
+        return { id: String(id), title, image };
+    })
+        .filter((info) => info !== null);
 }
 exports.parseSearchResults = parseSearchResults;
 
