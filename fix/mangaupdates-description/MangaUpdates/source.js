@@ -2406,7 +2406,7 @@ exports.MangaUpdatesInfo = {
     author: 'IntermittentlyRupert',
     contentRating: paperback_extensions_common_1.ContentRating.EVERYONE,
     icon: 'icon.png',
-    version: '2.0.0',
+    version: '2.0.1',
     description: 'MangaUpdates Tracker',
     websiteBaseURL: 'https://www.mangaupdates.com',
 };
